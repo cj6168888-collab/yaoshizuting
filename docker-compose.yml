@@ -10,7 +10,7 @@ services:
     volumes:
       - mysql_data:/var/lib/mysql
       - ./src/main/resources/schema.sql:/docker-entrypoint-initdb.d/schema.sql
-      - ./src/main/resources/docker-init/02_schema_baseline_patch.sql:/docker-entrypoint-initdb.d/02_schema_baseline_patch.sql
+      - ./src/main/resources/docker-init/99_schema_baseline_patch.sql:/docker-entrypoint-initdb.d/99_schema_baseline_patch.sql
     command: --default-authentication-plugin=mysql_native_password
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
