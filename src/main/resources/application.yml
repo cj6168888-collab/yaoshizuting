@@ -65,6 +65,20 @@ logging:
     com.yaoshizuting: debug
     org.springframework.security: info
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: when_authorized
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
 app:
   upload:
     root-path: ${APP_UPLOAD_ROOT:uploads}
