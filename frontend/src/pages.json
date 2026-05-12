@@ -1,0 +1,113 @@
+{
+  "pages": [
+    {
+      "path": "pages/auth/login",
+      "style": {
+        "navigationBarTitleText": "登录",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/index/index",
+      "style": {
+        "navigationBarTitleText": "工作台",
+        "navigationBarBackgroundColor": "#2b6b1f",
+        "navigationBarTextStyle": "white"
+      }
+    },
+    {
+      "path": "pages/shop/index",
+      "style": {
+        "navigationBarTitleText": "货品中心",
+        "navigationBarBackgroundColor": "#2b6b1f",
+        "navigationBarTextStyle": "white"
+      }
+    },
+    {
+      "path": "pages/team/list",
+      "style": {
+        "navigationBarTitleText": "团队管理",
+        "navigationBarBackgroundColor": "#2b6b1f",
+        "navigationBarTextStyle": "white"
+      }
+    },
+    {
+      "path": "pages/finance/wallet",
+      "style": {
+        "navigationBarTitleText": "我的钱包",
+        "navigationBarBackgroundColor": "#2b6b1f",
+        "navigationBarTextStyle": "white"
+      }
+    },
+    {
+      "path": "pages/finance/withdraw",
+      "style": {
+        "navigationBarTitleText": "提现",
+        "navigationBarBackgroundColor": "#2b6b1f",
+        "navigationBarTextStyle": "white"
+      }
+    },
+    {
+      "path": "pages/join/agent",
+      "style": {
+        "navigationBarTitleText": "申请代理",
+        "navigationBarBackgroundColor": "#2b6b1f",
+        "navigationBarTextStyle": "white"
+      }
+    },
+    {
+      "path": "pages/join/partner",
+      "style": {
+        "navigationBarTitleText": "申请合伙人",
+        "navigationBarBackgroundColor": "#2b6b1f",
+        "navigationBarTextStyle": "white"
+      }
+    },
+    {
+      "path": "pages/growth/scan",
+      "style": {
+        "navigationBarTitleText": "扫码邀请",
+        "navigationBarBackgroundColor": "#2b6b1f",
+        "navigationBarTextStyle": "white"
+      }
+    }
+  ],
+  "globalStyle": {
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "药师祖庭",
+    "navigationBarBackgroundColor": "#f4f6f1",
+    "backgroundColor": "#f4f6f1"
+  },
+  "tabBar": {
+    "color": "#7f8878",
+    "selectedColor": "#2b6b1f",
+    "backgroundColor": "#ffffff",
+    "borderStyle": "black",
+    "list": [
+      {
+        "pagePath": "pages/index/index",
+        "text": "首页",
+        "iconPath": "static/tabbar/home.png",
+        "selectedIconPath": "static/tabbar/home-active.png"
+      },
+      {
+        "pagePath": "pages/shop/index",
+        "text": "货品",
+        "iconPath": "static/tabbar/shop.png",
+        "selectedIconPath": "static/tabbar/shop-active.png"
+      },
+      {
+        "pagePath": "pages/team/list",
+        "text": "团队",
+        "iconPath": "static/tabbar/team.png",
+        "selectedIconPath": "static/tabbar/team-active.png"
+      },
+      {
+        "pagePath": "pages/finance/wallet",
+        "text": "我的",
+        "iconPath": "static/tabbar/user.png",
+        "selectedIconPath": "static/tabbar/user-active.png"
+      }
+    ]
+  }
+}

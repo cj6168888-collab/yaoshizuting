@@ -1,0 +1,9 @@
+target/
+frontend/node_modules/
+frontend/dist/
+nul
+
+*.log
+*.tmp
+.idea/
+.vscode/

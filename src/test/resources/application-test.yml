@@ -1,0 +1,75 @@
+server:
+  port: 0
+
+spring:
+  autoconfigure:
+    exclude:
+      - org.redisson.spring.starter.RedissonAutoConfigurationV2
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:test-schema.sql
+  datasource:
+    driver-class-name: org.h2.Driver
+    url: jdbc:h2:mem:yaoshizuting_test;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1
+    username: sa
+    password:
+  data:
+    redis:
+      host: ${TEST_REDIS_HOST:localhost}
+      port: ${TEST_REDIS_PORT:6379}
+      database: ${TEST_REDIS_DATABASE:1}
+  flyway:
+    enabled: false
+  redisson:
+    config: classpath:redisson.yaml
+  task:
+    scheduling:
+      enabled: false
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 6MB
+
+mybatis-plus:
+  mapper-locations: classpath:mapper/*.xml
+  type-aliases-package: com.yaoshizuting.entity
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      id-type: auto
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+jwt:
+  secret: test-secret-key-for-unit-testing-purpose-only-12345678901234567890
+  expiration: 604800000
+  header: Authorization
+  prefix: Bearer
+
+payment:
+  wechat:
+    api-key: test-wechat-api-key-1234567890
+  alipay:
+    public-key: test-alipay-public-key
+  callback:
+    allowed-ips: 127.0.0.1,::1
+
+rate-limit:
+  enabled: true
+  default-limit: 100
+  default-period: 60
+
+logging:
+  level:
+    com.yaoshizuting: DEBUG
+    org.springframework.security: DEBUG
+
+app:
+  upload:
+    root-path: ${TEST_UPLOAD_ROOT:target/test-uploads}
+    public-path: /uploads
+    max-image-size: 5242880

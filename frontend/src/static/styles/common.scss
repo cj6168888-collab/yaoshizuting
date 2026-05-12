@@ -1,0 +1,89 @@
+// 主题色
+$primary-color: #B8860B;
+$secondary-color: #DAA520;
+$bg-color: #F5F5F5;
+$text-primary: #333333;
+$text-secondary: #666666;
+$text-disabled: #999999;
+$border-color: #EEEEEE;
+
+// 通用样式
+page {
+  background-color: $bg-color;
+  font-size: 28rpx;
+  color: $text-primary;
+}
+
+// 文字颜色
+.text-primary { color: $primary-color; }
+.text-secondary { color: $text-secondary; }
+.text-disabled { color: $text-disabled; }
+
+// 背景色
+.bg-primary { background-color: $primary-color; }
+.bg-white { background-color: #ffffff; }
+
+// 文字大小
+.font-xs { font-size: 24rpx; }
+.font-sm { font-size: 26rpx; }
+.font-md { font-size: 28rpx; }
+.font-lg { font-size: 32rpx; }
+.font-xl { font-size: 36rpx; }
+
+// Flex布局
+.flex { display: flex; }
+.flex-col { flex-direction: column; }
+.flex-center { justify-content: center; }
+.flex-between { justify-content: space-between; }
+.flex-align { align-items: center; }
+.flex-wrap { flex-wrap: wrap; }
+.flex-1 { flex: 1; }
+
+// 间距
+.mt-10 { margin-top: 10rpx; }
+.mt-20 { margin-top: 20rpx; }
+.mt-30 { margin-top: 30rpx; }
+.mt-40 { margin-top: 40rpx; }
+.mb-10 { margin-bottom: 10rpx; }
+.mb-20 { margin-bottom: 20rpx; }
+.mb-30 { margin-bottom: 30rpx; }
+.p-20 { padding: 20rpx; }
+.p-30 { padding: 30rpx; }
+
+// 按钮
+.btn-primary {
+  background: linear-gradient(135deg, $primary-color 0%, $secondary-color 100%);
+  color: #ffffff;
+  border: none;
+  border-radius: 44rpx;
+}
+
+.btn-default {
+  background: #ffffff;
+  color: $text-primary;
+  border: 1rpx solid $border-color;
+  border-radius: 44rpx;
+}
+
+// 卡片
+.card {
+  background: #ffffff;
+  border-radius: 16rpx;
+  padding: 30rpx;
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.05);
+}
+
+// 输入框
+.input {
+  height: 88rpx;
+  background: #F5F5F5;
+  border-radius: 12rpx;
+  padding: 0 30rpx;
+  font-size: 28rpx;
+}
+
+// 分隔线
+.divider {
+  height: 1rpx;
+  background: $border-color;
+}

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ruleset name="CustomPMDRules" xmlns="http://pmd.sourceforge.net/RULES/2.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://pmd.sourceforge.net/RULES/2.0.0 http://pmd.sourceforge.net/rulesets/ruleset-2.0.0.xsd">
+  <description>Minimal custom PMD rules for project</description>
+  <rule ref="category/java/bestpractices.xml/UnusedPrivateMethod"/>
+  <rule ref="category/java/bestpractices.xml/UnusedPrivateField"/>
+</ruleset>

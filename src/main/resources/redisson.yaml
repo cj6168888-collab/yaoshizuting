@@ -1,0 +1,14 @@
+singleServerConfig:
+  address: "redis://${SPRING_DATA_REDIS_HOST}:${SPRING_DATA_REDIS_PORT}"
+  database: 0
+  connectionPoolSize: 10
+  connectionMinimumIdleSize: 5
+  idleConnectionTimeout: 10000
+  connectTimeout: 10000
+  timeout: 3000
+  retryAttempts: 3
+  retryInterval: 1500
+threads: 16
+nettyThreads: 4
+transportMode: "NIO"
+lockWatchdogTimeout: 30000

@@ -1,0 +1,17 @@
+target/
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+.git/
+.github/
+.idea/
+.vscode/
+
+*.log
+*.tmp
+*.bak
+*.swp
+
+node_modules/
+nul

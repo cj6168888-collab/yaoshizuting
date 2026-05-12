@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.yaoshizuting.mapper.GytUserHierarchyMapper">
+  <select id="selectPathByUserId" parameterType="long" resultType="String">
+    SELECT tree_path
+    FROM gyt_user_hierarchy
+    WHERE user_id = #{userId}
+    LIMIT 1
+  </select>
+
+  <select id="selectByPathPrefix" parameterType="string" resultType="com.yaoshizuting.entity.GytUserHierarchy">
+    SELECT * FROM gyt_user_hierarchy
+    WHERE tree_path LIKE CONCAT(#{path}, '%')
+  </select>
+</mapper>

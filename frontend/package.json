@@ -1,0 +1,26 @@
+{
+  "name": "yaoshizuting-miniapp",
+  "version": "1.0.0",
+  "description": "药师祖庭数字化管理系统 - 微信小程序/H5",
+  "type": "module",
+  "main": "main.js",
+  "scripts": {
+    "dev": "vite --host",
+    "dev:h5": "vite --host",
+    "build": "vite build",
+    "dev:mp-weixin": "vite build --watch --dest dist/build/mp-weixin",
+    "build:h5": "vite build",
+    "build:mp-weixin": "vite build --dest dist/build/mp-weixin",
+    "preview": "vite preview --host"
+  },
+  "dependencies": {
+    "vue": "^3.4.0",
+    "pinia": "^2.1.7",
+    "axios": "^1.16.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.0.0",
+    "vite": "^5.0.0",
+    "sass": "^1.69.0"
+  }
+}
