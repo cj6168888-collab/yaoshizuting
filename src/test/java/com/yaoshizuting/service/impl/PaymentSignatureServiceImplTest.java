@@ -7,6 +7,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Base64;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -45,7 +46,7 @@ class PaymentSignatureServiceImplTest {
         String signature = generateTestSignature(body, timestamp, nonce);
         
         boolean result = signatureService.verifyWechatSignature(signature, body, timestamp, nonce);
-        assertTrue(result || !result);
+        assertTrue(result);
     }
 
     @Test
@@ -67,6 +68,15 @@ class PaymentSignatureServiceImplTest {
         String signature = "";
         
         boolean result = signatureService.verifyWechatSignature(signature, body, timestamp, nonce);
+        assertFalse(result);
+    }
+
+    @Test
+    void testVerifyWechatSignature_Exception_ReturnsFalse() {
+        ReflectionTestUtils.setField(signatureService, "wechatApiKey", null);
+
+        boolean result = signatureService.verifyWechatSignature("sig", "body", "timestamp", "nonce");
+
         assertFalse(result);
     }
 
@@ -99,6 +109,37 @@ class PaymentSignatureServiceImplTest {
         assertFalse(result);
     }
 
+    @Test
+    void testVerifyAlipaySignature_ValidSignature_ReturnsTrue() throws Exception {
+        java.security.KeyPair keyPair = generateRsaKeyPair();
+        ReflectionTestUtils.setField(signatureService, "alipayPublicKey",
+                Base64.getEncoder().encodeToString(keyPair.getPublic().getEncoded()));
+        Map<String, String> params = new HashMap<>();
+        params.put("out_trade_no", "ORDER123");
+        params.put("trade_status", "TRADE_SUCCESS");
+        params.put("sign", signAlipayParams(params, keyPair));
+
+        boolean result = signatureService.verifyAlipaySignature(params);
+
+        assertTrue(result);
+    }
+
+    @Test
+    void testVerifyAlipaySignature_WrongKeySignature_ReturnsFalse() throws Exception {
+        java.security.KeyPair verificationKeyPair = generateRsaKeyPair();
+        java.security.KeyPair signingKeyPair = generateRsaKeyPair();
+        ReflectionTestUtils.setField(signatureService, "alipayPublicKey",
+                Base64.getEncoder().encodeToString(verificationKeyPair.getPublic().getEncoded()));
+        Map<String, String> params = new HashMap<>();
+        params.put("out_trade_no", "ORDER123");
+        params.put("trade_status", "TRADE_SUCCESS");
+        params.put("sign", signAlipayParams(params, signingKeyPair));
+
+        boolean result = signatureService.verifyAlipaySignature(params);
+
+        assertFalse(result);
+    }
+
     private String generateTestSignature(String body, String timestamp, String nonce) {
         try {
             String message = timestamp + "\n" + nonce + "\n" + body;
@@ -111,5 +152,24 @@ class PaymentSignatureServiceImplTest {
         } catch (Exception e) {
             return "";
         }
+    }
+
+    private java.security.KeyPair generateRsaKeyPair() throws Exception {
+        java.security.KeyPairGenerator generator = java.security.KeyPairGenerator.getInstance("RSA");
+        generator.initialize(2048);
+        return generator.generateKeyPair();
+    }
+
+    private String signAlipayParams(Map<String, String> params, java.security.KeyPair keyPair) throws Exception {
+        StringBuilder sb = new StringBuilder();
+        params.entrySet().stream()
+                .filter(entry -> !"sign".equals(entry.getKey()))
+                .sorted(Map.Entry.comparingByKey())
+                .forEach(entry -> sb.append(entry.getKey()).append("=").append(entry.getValue()).append("&"));
+        String signData = sb.substring(0, sb.length() - 1);
+        java.security.Signature signature = java.security.Signature.getInstance("SHA256withRSA");
+        signature.initSign(keyPair.getPrivate());
+        signature.update(signData.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        return Base64.getEncoder().encodeToString(signature.sign());
     }
 }
