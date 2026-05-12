@@ -7,6 +7,7 @@ import com.yaoshizuting.entity.User;
 import com.yaoshizuting.enums.OrderStatus;
 import com.yaoshizuting.enums.ProfitType;
 import com.yaoshizuting.enums.UserRole;
+import com.yaoshizuting.exception.BusinessException;
 import com.yaoshizuting.mapper.ProfitLogMapper;
 import com.yaoshizuting.mapper.UserMapper;
 import com.yaoshizuting.service.DistributedLockService;
@@ -26,6 +27,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -58,6 +60,163 @@ public class ProfitServiceImplTest {
     @BeforeEach
     void setUp() {
         profitService = new ProfitServiceImpl(userMapper, profitLogMapper, orderService, policyConfigService, lockService);
+    }
+
+    @Test
+    void processJoinStoreProfitSkipsUnpaidOrder() {
+        Order order = order("ORD-STORE-PENDING", 10L, OrderStatus.PENDING.getCode());
+
+        profitService.processJoinStoreProfit(order);
+
+        verify(userMapper, never()).selectById(anyLong());
+        verify(profitLogMapper, never()).insert(any());
+        verify(lockService, never()).tryLock(anyString(), anyLong(), anyLong());
+    }
+
+    @Test
+    void processJoinStoreProfitRejectsMissingUser() {
+        Order order = order("ORD-STORE-MISSING", 10L, OrderStatus.PAID.getCode());
+        when(userMapper.selectById(10L)).thenReturn(null);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> profitService.processJoinStoreProfit(order));
+
+        assertEquals("用户不存在", exception.getMessage());
+        verify(userMapper, never()).updateById(any());
+    }
+
+    @Test
+    void processJoinStoreProfitPromotesUserWithoutParentAndSkipsProfit() {
+        User newUser = user(10L, UserRole.MEMBER, "0.00", "0.00");
+        newUser.setParentId(null);
+        Order order = order("ORD-STORE-NO-PARENT", newUser.getId(), OrderStatus.PAID.getCode());
+        when(userMapper.selectById(newUser.getId())).thenReturn(newUser);
+
+        profitService.processJoinStoreProfit(order);
+
+        assertEquals(UserRole.STORE.getCode(), newUser.getRole());
+        verify(userMapper).updateById(newUser);
+        verify(profitLogMapper, never()).insert(any());
+        verify(lockService, never()).tryLock(anyString(), anyLong(), anyLong());
+    }
+
+    @Test
+    void processJoinStoreProfitDistributesDirectIndirectAndTeamManagementRewards() {
+        User ancestorPartner = user(1L, UserRole.PARTNER, "0.00", "0.00");
+        ancestorPartner.setStoreCount(3);
+        User parentStore = user(3L, UserRole.STORE, "0.00", "0.00");
+        User newUser = user(10L, UserRole.MEMBER, "0.00", "0.00");
+        newUser.setParentId(parentStore.getId());
+        newUser.setTreePath("/0/1/3/");
+        Order order = order("ORD-STORE-REWARDS", newUser.getId(), OrderStatus.PAID.getCode());
+
+        when(userMapper.selectById(newUser.getId())).thenReturn(newUser);
+        when(userMapper.selectById(parentStore.getId())).thenReturn(parentStore, parentStore);
+        when(userMapper.selectById(ancestorPartner.getId()))
+                .thenReturn(ancestorPartner, ancestorPartner, ancestorPartner, ancestorPartner);
+        when(policyConfigService.getConfigValue("STORE_REWARD_DIRECT")).thenReturn(new BigDecimal("9000.00"));
+        when(policyConfigService.getConfigValue("REWARD_INDIRECT")).thenReturn(new BigDecimal("3000.00"));
+        when(policyConfigService.getConfigValue("PARTNER_TEAM_MANAGEMENT")).thenReturn(new BigDecimal("1000.00"));
+        when(lockService.tryLock(anyString(), anyLong(), anyLong())).thenReturn(true);
+        when(userMapper.updateById(any(User.class))).thenReturn(1);
+
+        profitService.processJoinStoreProfit(order);
+
+        assertEquals(UserRole.STORE.getCode(), newUser.getRole());
+        assertEquals(new BigDecimal("9000.00"), parentStore.getBalance());
+        assertEquals(new BigDecimal("9000.00"), parentStore.getTotalEarnings());
+        assertEquals(new BigDecimal("4000.00"), ancestorPartner.getBalance());
+        assertEquals(new BigDecimal("4000.00"), ancestorPartner.getTotalEarnings());
+
+        ArgumentCaptor<ProfitLog> logCaptor = ArgumentCaptor.forClass(ProfitLog.class);
+        verify(profitLogMapper, times(3)).insert(logCaptor.capture());
+        List<ProfitLog> logs = logCaptor.getAllValues();
+        assertEquals(ProfitType.DIRECT_STORE.getCode(), logs.get(0).getType());
+        assertEquals(new BigDecimal("9000.00"), logs.get(0).getAmount());
+        assertEquals(ProfitType.INDIRECT_STORE.getCode(), logs.get(1).getType());
+        assertEquals(new BigDecimal("3000.00"), logs.get(1).getAmount());
+        assertEquals(ProfitType.TEAM_MANAGEMENT.getCode(), logs.get(2).getType());
+        assertEquals(new BigDecimal("1000.00"), logs.get(2).getAmount());
+    }
+
+    @Test
+    void processJoinAgentProfitSkipsUnpaidOrder() {
+        Order order = order("ORD-AGENT-PENDING", 20L, OrderStatus.PENDING.getCode());
+
+        profitService.processJoinAgentProfit(order);
+
+        verify(userMapper, never()).selectById(anyLong());
+        verify(profitLogMapper, never()).insert(any());
+        verify(lockService, never()).tryLock(anyString(), anyLong(), anyLong());
+    }
+
+    @Test
+    void processJoinAgentProfitRejectsMissingUser() {
+        Order order = order("ORD-AGENT-MISSING", 20L, OrderStatus.PAID.getCode());
+        when(userMapper.selectById(20L)).thenReturn(null);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> profitService.processJoinAgentProfit(order));
+
+        assertEquals("用户不存在", exception.getMessage());
+        verify(userMapper, never()).updateById(any());
+    }
+
+    @Test
+    void processJoinAgentProfitRewardsStoreParent() {
+        User parentStore = user(30L, UserRole.STORE, "100.00", "200.00");
+        User newAgent = user(40L, UserRole.MEMBER, "0.00", "0.00");
+        newAgent.setParentId(parentStore.getId());
+        Order order = order("ORD-AGENT-STORE-PARENT", newAgent.getId(), OrderStatus.PAID.getCode());
+
+        when(userMapper.selectById(newAgent.getId())).thenReturn(newAgent);
+        when(userMapper.selectById(parentStore.getId())).thenReturn(parentStore, parentStore);
+        when(policyConfigService.getConfigValue("AGENT_REWARD_DIRECT_AGENT")).thenReturn(new BigDecimal("6000.00"));
+        when(lockService.tryLock(anyString(), anyLong(), anyLong())).thenReturn(true);
+        when(userMapper.updateById(any(User.class))).thenReturn(1);
+
+        profitService.processJoinAgentProfit(order);
+
+        assertEquals(UserRole.AGENT.getCode(), newAgent.getRole());
+        assertEquals(new BigDecimal("6100.00"), parentStore.getBalance());
+        assertEquals(new BigDecimal("6200.00"), parentStore.getTotalEarnings());
+        ArgumentCaptor<ProfitLog> logCaptor = ArgumentCaptor.forClass(ProfitLog.class);
+        verify(profitLogMapper).insert(logCaptor.capture());
+        assertEquals(ProfitType.AGENT_MANAGE.getCode(), logCaptor.getValue().getType());
+        assertEquals(new BigDecimal("6000.00"), logCaptor.getValue().getAmount());
+    }
+
+    @Test
+    void processJoinPartnerProfitRejectsMissingUser() {
+        Order order = order("ORD-PARTNER-MISSING", 40L, OrderStatus.PAID.getCode());
+        when(userMapper.selectById(40L)).thenReturn(null);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> profitService.processJoinPartnerProfit(order));
+
+        assertEquals("用户不存在", exception.getMessage());
+        verify(userMapper, never()).updateById(any());
+    }
+
+    @Test
+    void processPartnerRecruitAgentProfitWithoutExistingCountSkipsSupportFee() {
+        User partner = user(1L, UserRole.PARTNER, "0.00", "0.00");
+        partner.setAgentCount(null);
+        User newAgent = user(200L, UserRole.AGENT, "0.00", "0.00");
+        when(policyConfigService.getConfigValue("PARTNER_MANAGE_FEE")).thenReturn(new BigDecimal("39800.00"));
+        when(lockService.tryLock(anyString(), anyLong(), anyLong())).thenReturn(true);
+        when(userMapper.selectById(partner.getId())).thenReturn(partner);
+        when(userMapper.updateById(any(User.class))).thenReturn(1);
+
+        profitService.processPartnerRecruitAgentProfit(partner, newAgent);
+
+        assertEquals(1, partner.getAgentCount());
+        assertEquals(new BigDecimal("39800.00"), partner.getBalance());
+        verify(policyConfigService, never()).getConfigValue("HEADQUARTER_SUPPORT_FEE");
+        verify(profitLogMapper).insert(any(ProfitLog.class));
     }
 
     @Test
@@ -195,5 +354,34 @@ public class ProfitServiceImplTest {
         assertEquals(new BigDecimal("10.00"), dto.getAmount());
         assertEquals("2026-05-12 09:30:00", dto.getCreateTime());
         assertEquals("direct reward", dto.getRemark());
+    }
+
+    @Test
+    void getWalletInfoRejectsMissingUser() {
+        when(userMapper.selectById(50L)).thenReturn(null);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> profitService.getWalletInfo(50L));
+
+        assertEquals("用户不存在", exception.getMessage());
+        verify(profitLogMapper, never()).selectByReceiverId(anyLong());
+    }
+
+    private Order order(String orderSn, Long userId, Integer status) {
+        Order order = new Order();
+        order.setOrderSn(orderSn);
+        order.setUserId(userId);
+        order.setStatus(status);
+        return order;
+    }
+
+    private User user(Long id, UserRole role, String balance, String totalEarnings) {
+        User user = new User();
+        user.setId(id);
+        user.setRole(role.getCode());
+        user.setBalance(new BigDecimal(balance));
+        user.setTotalEarnings(new BigDecimal(totalEarnings));
+        return user;
     }
 }
