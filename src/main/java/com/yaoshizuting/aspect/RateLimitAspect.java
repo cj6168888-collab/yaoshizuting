@@ -72,7 +72,6 @@ public class RateLimitAspect {
             case IP -> "rate_limit:ip:" + clientId + ":" + methodName;
             case USER -> "rate_limit:user:" + getUserId() + ":" + methodName;
             case API -> "rate_limit:api:" + methodName;
-            default -> "rate_limit:api:" + methodName;
         };
     }
 

@@ -13,6 +13,7 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.web.context.request.RequestAttributes;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
@@ -207,5 +208,50 @@ class RateLimitAspectTest {
 
         assertEquals("success", result);
         verify(valueOperations).increment("rate_limit:ip:unknown:testMethod()");
+    }
+
+    @Test
+    void enforceRateLimitBuildsAnonymousUserKeyWithoutRequestContext() throws Throwable {
+        RequestContextHolder.resetRequestAttributes();
+        when(rateLimit.limit()).thenReturn(10);
+        when(rateLimit.period()).thenReturn(60);
+        when(rateLimit.type()).thenReturn(RateLimit.RateLimitType.USER);
+        when(valueOperations.increment("rate_limit:user:anonymous:testMethod()")).thenReturn(1L);
+        when(joinPoint.proceed()).thenReturn("success");
+
+        Object result = aspect.enforceRateLimit(joinPoint, rateLimit);
+
+        assertEquals("success", result);
+        verify(valueOperations).increment("rate_limit:user:anonymous:testMethod()");
+    }
+
+    @Test
+    void enforceRateLimitFallsBackToUnknownIpWhenRequestAttributesAreInvalid() throws Throwable {
+        RequestContextHolder.setRequestAttributes(mock(RequestAttributes.class));
+        when(rateLimit.limit()).thenReturn(10);
+        when(rateLimit.period()).thenReturn(60);
+        when(rateLimit.type()).thenReturn(RateLimit.RateLimitType.IP);
+        when(valueOperations.increment("rate_limit:ip:unknown:testMethod()")).thenReturn(1L);
+        when(joinPoint.proceed()).thenReturn("success");
+
+        Object result = aspect.enforceRateLimit(joinPoint, rateLimit);
+
+        assertEquals("success", result);
+        verify(valueOperations).increment("rate_limit:ip:unknown:testMethod()");
+    }
+
+    @Test
+    void enforceRateLimitFallsBackToAnonymousUserWhenRequestAttributesAreInvalid() throws Throwable {
+        RequestContextHolder.setRequestAttributes(mock(RequestAttributes.class));
+        when(rateLimit.limit()).thenReturn(10);
+        when(rateLimit.period()).thenReturn(60);
+        when(rateLimit.type()).thenReturn(RateLimit.RateLimitType.USER);
+        when(valueOperations.increment("rate_limit:user:anonymous:testMethod()")).thenReturn(1L);
+        when(joinPoint.proceed()).thenReturn("success");
+
+        Object result = aspect.enforceRateLimit(joinPoint, rateLimit);
+
+        assertEquals("success", result);
+        verify(valueOperations).increment("rate_limit:user:anonymous:testMethod()");
     }
 }
