@@ -2,9 +2,7 @@ package com.yaoshizuting.service.impl;
 
 import com.yaoshizuting.dto.TeamNodeDTO;
 import com.yaoshizuting.entity.User;
-import com.yaoshizuting.mapper.GytUserHierarchyMapper;
 import com.yaoshizuting.mapper.UserMapper;
-import com.yaoshizuting.service.TeamService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -15,14 +13,17 @@ import org.springframework.data.redis.core.ValueOperations;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.Mockito.when;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-public class TeamServiceImplTest {
+class TeamServiceImplTest {
 
     @Mock
     private UserMapper userMapper;
@@ -73,5 +74,104 @@ public class TeamServiceImplTest {
         assertEquals(1, n1.getRole().intValue());
         assertEquals(3L, n2.getUserId().longValue());
         assertEquals(2, n2.getRole().intValue());
+        verify(valueOperations).set(eq("team:tree:" + userId), any(String.class), eq(5L), eq(TimeUnit.MINUTES));
+    }
+
+    @Test
+    void getTeamTreeReturnsCachedTreeWithoutDatabaseLookup() {
+        Long userId = 1L;
+        String cachedTree = """
+                [
+                  {
+                    "userId": 2,
+                    "role": 1,
+                    "parentId": 1,
+                    "treePath": "/0/1/",
+                    "nickname": "缓存会员",
+                    "mobile": "13800138002"
+                  }
+                ]
+                """;
+
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get("team:tree:" + userId)).thenReturn(cachedTree);
+
+        List<TeamNodeDTO> result = teamService.getTeamTree(userId);
+
+        assertEquals(1, result.size());
+        TeamNodeDTO node = result.get(0);
+        assertEquals(2L, node.getUserId());
+        assertEquals(1, node.getRole());
+        assertEquals(1L, node.getParentId());
+        assertEquals("/0/1/", node.getTreePath());
+        assertEquals("缓存会员", node.getNickname());
+        assertEquals("13800138002", node.getMobile());
+        verify(userMapper, never()).selectById(any());
+        verify(userMapper, never()).selectList(any());
+    }
+
+    @Test
+    void getTeamTreeFallsBackToDatabaseWhenCachedTreeIsInvalid() {
+        Long userId = 1L;
+        User root = new User();
+        root.setId(userId);
+        root.setTreePath("/0/1/");
+
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get("team:tree:" + userId)).thenReturn("{invalid-json");
+        when(userMapper.selectById(userId)).thenReturn(root);
+        when(userMapper.selectList(any())).thenReturn(List.of());
+
+        List<TeamNodeDTO> result = teamService.getTeamTree(userId);
+
+        assertEquals(0, result.size());
+        verify(userMapper).selectById(userId);
+        verify(userMapper).selectList(any());
+    }
+
+    @Test
+    void getTeamTreeReturnsEmptyListWhenUserDoesNotExist() {
+        Long userId = 404L;
+
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get("team:tree:" + userId)).thenReturn(null);
+        when(userMapper.selectById(userId)).thenReturn(null);
+
+        List<TeamNodeDTO> result = teamService.getTeamTree(userId);
+
+        assertEquals(0, result.size());
+        verify(userMapper, never()).selectList(any());
+        verify(valueOperations, never()).set(any(), any(), eq(5L), eq(TimeUnit.MINUTES));
+    }
+
+    @Test
+    void getTeamTreeUsesDefaultRootPathWhenUserTreePathIsMissing() {
+        Long userId = 1L;
+        User root = new User();
+        root.setId(userId);
+        root.setTreePath(null);
+
+        User child = new User();
+        child.setId(2L);
+        child.setParentId(1L);
+        child.setTreePath("/0/");
+        child.setRole(1);
+        child.setNickname("默认路径会员");
+        child.setMobile("13800138002");
+
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get("team:tree:" + userId)).thenReturn(null);
+        when(userMapper.selectById(userId)).thenReturn(root);
+        when(userMapper.selectList(any())).thenReturn(List.of(child));
+
+        List<TeamNodeDTO> result = teamService.getTeamTree(userId);
+
+        assertEquals(1, result.size());
+        TeamNodeDTO node = result.get(0);
+        assertEquals(2L, node.getUserId());
+        assertEquals(1L, node.getParentId());
+        assertEquals("/0/", node.getTreePath());
+        assertEquals("默认路径会员", node.getNickname());
+        assertEquals("13800138002", node.getMobile());
     }
 }
