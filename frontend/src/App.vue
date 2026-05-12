@@ -143,7 +143,28 @@ function unwrap(response) {
 }
 
 function errorMessage(error, fallback = '操作失败') {
-  return error.response?.data?.message || error.message || fallback;
+  const serverMessage = error.response?.data?.message || error.response?.data?.error;
+  if (serverMessage) return `${fallback}：${serverMessage}`;
+
+  if (error.code === 'ECONNABORTED') {
+    return `${fallback}：请求超时，请稍后重试`;
+  }
+
+  if (error.message === 'Network Error') {
+    return `${fallback}：网络连接异常，请检查后端服务或本机网络`;
+  }
+
+  const status = error.response?.status;
+  if (status === 401) return `${fallback}：登录已过期，请重新登录`;
+  if (status === 403) return `${fallback}：当前账号无权执行此操作`;
+  if (status === 404) return `${fallback}：接口不存在或资源已被删除`;
+  if (status >= 500) return `${fallback}：服务器暂时不可用`;
+
+  return error.message ? `${fallback}：${error.message}` : fallback;
+}
+
+function isFailureMessage(message) {
+  return /失败|错误|异常|超时|无权|过期|不可用|不存在/.test(message || '');
 }
 
 function formatMoney(amount) {
@@ -902,7 +923,7 @@ onUnmounted(clearCodeTimer);
             <p>后台维护商品、价格、库存、图片与上下架状态</p>
           </div>
 
-          <div v-if="productMessage" class="bind-feedback admin-message" :class="{ ok: !productMessage.includes('失败'), fail: productMessage.includes('失败') }">{{ productMessage }}</div>
+          <div v-if="productMessage" class="bind-feedback admin-message" :class="{ ok: !isFailureMessage(productMessage), fail: isFailureMessage(productMessage) }">{{ productMessage }}</div>
 
           <div class="admin-grid two">
             <div class="panel-card">
@@ -983,7 +1004,7 @@ onUnmounted(clearCodeTimer);
             <p>查询会员，调整角色与账号状态</p>
           </div>
 
-          <div v-if="userMessage" class="bind-feedback admin-message ok">{{ userMessage }}</div>
+          <div v-if="userMessage" class="bind-feedback admin-message" :class="{ ok: !isFailureMessage(userMessage), fail: isFailureMessage(userMessage) }">{{ userMessage }}</div>
           <div class="panel-card">
             <div class="pc-header"><h3>人员筛选</h3><span class="tag-count">{{ userTotal }} 人</span></div>
             <div class="filter-bar">
@@ -1035,7 +1056,7 @@ onUnmounted(clearCodeTimer);
             <p>查看资金概览、提现审核与收益流水</p>
           </div>
 
-          <div v-if="financeMessage" class="bind-feedback admin-message ok">{{ financeMessage }}</div>
+          <div v-if="financeMessage" class="bind-feedback admin-message" :class="{ ok: !isFailureMessage(financeMessage), fail: isFailureMessage(financeMessage) }">{{ financeMessage }}</div>
 
           <div class="asset-cards">
             <div class="asset-card green"><span class="ac-icon">余</span><div class="ac-body"><span class="ac-label">会员总余额</span><span class="ac-value">¥{{ formatMoney(financeSummary.totalBalance) }}</span></div></div>
@@ -1126,7 +1147,7 @@ onUnmounted(clearCodeTimer);
             <h2>系统配置</h2>
             <p>管理加盟费用与分润政策</p>
           </div>
-          <div v-if="policyMessage" class="bind-feedback ok admin-message">{{ policyMessage }}</div>
+          <div v-if="policyMessage" class="bind-feedback admin-message" :class="{ ok: !isFailureMessage(policyMessage), fail: isFailureMessage(policyMessage) }">{{ policyMessage }}</div>
           <div v-for="group in policyGroups" :key="group.title" class="panel-card">
             <div class="pc-header"><h3>{{ group.title }}</h3></div>
             <div class="config-grid editable">

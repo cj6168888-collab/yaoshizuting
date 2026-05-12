@@ -1,17 +1,24 @@
 package com.yaoshizuting.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
 import java.io.Serial;
 import java.io.Serializable;
 
 @Data
+@Schema(description = "统一 API 响应")
 public class ApiResponse<T> implements Serializable {
     @Serial
     private static final long serialVersionUID = 1L;
 
+    @Schema(description = "业务状态码，200 表示成功", example = "200")
     private Integer code;
+
+    @Schema(description = "响应消息", example = "操作成功")
     private String message;
+
+    @Schema(description = "响应数据")
     private T data;
 
     public static <T> ApiResponse<T> success(T data) {

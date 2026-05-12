@@ -10,6 +10,9 @@ import com.yaoshizuting.mapper.ProductMapper;
 import com.yaoshizuting.service.FileStorageService;
 import com.yaoshizuting.service.ProductService;
 import com.yaoshizuting.utils.CsvExportUtils;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
@@ -32,6 +35,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/admin/product")
 @RequiredArgsConstructor
+@Tag(name = "后台商品管理", description = "商品分页查询、创建更新、上下架、图片上传与 CSV 导出")
 public class AdminProductController {
 
     private final ProductService productService;
@@ -39,12 +43,13 @@ public class AdminProductController {
     private final ProductMapper productMapper;
 
     @GetMapping("/list")
+    @Operation(summary = "分页查询商品", description = "支持按商品类型、上下架状态、商品名或编码筛选，分页大小最大 100。")
     public ApiResponse<Map<String, Object>> list(
-            @RequestParam(defaultValue = "1") long page,
-            @RequestParam(defaultValue = "20") long size,
-            @RequestParam(required = false) Integer productType,
-            @RequestParam(required = false) Integer status,
-            @RequestParam(required = false) String keyword) {
+            @Parameter(description = "页码，从 1 开始", example = "1") @RequestParam(defaultValue = "1") long page,
+            @Parameter(description = "每页数量，最大 100", example = "20") @RequestParam(defaultValue = "20") long size,
+            @Parameter(description = "商品类型：1店铺商品，2代理商品，3合伙商品", example = "1") @RequestParam(required = false) Integer productType,
+            @Parameter(description = "状态：0下架，1上架", example = "1") @RequestParam(required = false) Integer status,
+            @Parameter(description = "商品名或编码关键字", example = "店铺") @RequestParam(required = false) String keyword) {
 
         LambdaQueryWrapper<Product> wrapper = buildListWrapper(productType, status, keyword);
         Page<Product> result = productMapper.selectPage(new Page<>(page, Math.min(size, 100)), wrapper);
@@ -57,10 +62,11 @@ public class AdminProductController {
     }
 
     @GetMapping("/export")
+    @Operation(summary = "导出商品 CSV", description = "按当前筛选条件导出最多 5000 条商品数据。")
     public ResponseEntity<byte[]> export(
-            @RequestParam(required = false) Integer productType,
-            @RequestParam(required = false) Integer status,
-            @RequestParam(required = false) String keyword) {
+            @Parameter(description = "商品类型：1店铺商品，2代理商品，3合伙商品", example = "1") @RequestParam(required = false) Integer productType,
+            @Parameter(description = "状态：0下架，1上架", example = "1") @RequestParam(required = false) Integer status,
+            @Parameter(description = "商品名或编码关键字", example = "店铺") @RequestParam(required = false) String keyword) {
 
         LambdaQueryWrapper<Product> wrapper = buildListWrapper(productType, status, keyword)
                 .last("LIMIT 5000");
@@ -88,29 +94,34 @@ public class AdminProductController {
 
     @PostMapping("/upload")
     @AuditLog(module = "商品管理", operation = "上传商品图片")
-    public ApiResponse<Map<String, Object>> uploadImage(@RequestParam("file") MultipartFile file) {
+    @Operation(summary = "上传商品图片", description = "上传商品图片并返回可访问的图片 URL。")
+    public ApiResponse<Map<String, Object>> uploadImage(
+            @Parameter(description = "商品图片文件") @RequestParam("file") MultipartFile file) {
         String url = fileStorageService.storeProductImage(file);
         return ApiResponse.success(Map.of("url", url));
     }
 
     @PostMapping
     @AuditLog(module = "商品管理", operation = "创建商品")
+    @Operation(summary = "创建商品", description = "创建后台商品，商品类型决定其加盟、代理或合伙权益。")
     public ApiResponse<Product> create(@Valid @RequestBody ProductUpsertRequest request) {
         return ApiResponse.success(productService.createProduct(request));
     }
 
     @PutMapping("/{id}")
     @AuditLog(module = "商品管理", operation = "更新商品")
+    @Operation(summary = "更新商品", description = "按商品 ID 更新商品基础信息、价格、库存、图片和上下架状态。")
     public ApiResponse<Product> update(
-            @PathVariable Long id,
+            @Parameter(description = "商品 ID", example = "1") @PathVariable Long id,
             @Valid @RequestBody ProductUpsertRequest request) {
         return ApiResponse.success(productService.updateProduct(id, request));
     }
 
     @PatchMapping("/{id}/status")
     @AuditLog(module = "商品管理", operation = "更新商品状态")
+    @Operation(summary = "更新商品上下架状态", description = "请求体示例：{\"status\":1}，0 表示下架，1 表示上架。")
     public ApiResponse<Product> updateStatus(
-            @PathVariable Long id,
+            @Parameter(description = "商品 ID", example = "1") @PathVariable Long id,
             @RequestBody Map<String, Integer> body) {
         return ApiResponse.success(productService.updateStatus(id, body.get("status")));
     }
