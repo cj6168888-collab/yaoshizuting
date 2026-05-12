@@ -13,6 +13,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -78,6 +79,63 @@ class ReferralControllerTest {
     }
 
     @Test
+    void getInviteQrDataReturnsNotFoundWhenUserIsMissing() {
+        when(request.getAttribute("userId")).thenReturn(12L);
+        when(userMapper.selectById(12L)).thenReturn(null);
+
+        ApiResponse<Map<String, Object>> response = controller.getInviteQrData(request);
+
+        assertEquals(404, response.getCode());
+        assertEquals("用户不存在", response.getMessage());
+    }
+
+    @Test
+    void getInviteQrDataFallsBackToRequestAttributeForNonBearerHeader() {
+        when(request.getHeader("Authorization")).thenReturn("Basic credentials");
+        when(request.getAttribute("userId")).thenReturn(12L);
+        when(userMapper.selectById(12L)).thenReturn(user(12L, "13800138000", "邀请人"));
+
+        ApiResponse<Map<String, Object>> response = controller.getInviteQrData(request);
+
+        assertEquals(200, response.getCode());
+        assertEquals(12L, response.getData().get("parentId"));
+        verify(jwtUtils, never()).getUserIdFromToken(any());
+    }
+
+    @Test
+    void getInviteQrDataTreatsTokenParsingFailureAsAnonymous() {
+        when(request.getHeader("Authorization")).thenReturn("Bearer invalid-token");
+        when(jwtUtils.getUserIdFromToken("invalid-token")).thenThrow(new IllegalArgumentException("bad token"));
+
+        ApiResponse<Map<String, Object>> response = controller.getInviteQrData(request);
+
+        assertEquals(401, response.getCode());
+        assertEquals("请先登录", response.getMessage());
+        verify(userMapper, never()).selectById(any());
+    }
+
+    @Test
+    void bindParentRejectsAnonymousRequest() {
+        ApiResponse<Map<String, Object>> response = controller.bindParent(9L, request);
+
+        assertEquals(401, response.getCode());
+        assertEquals("请先登录", response.getMessage());
+        verify(userMapper, never()).selectById(any());
+    }
+
+    @Test
+    void bindParentRejectsMissingCurrentUser() {
+        when(request.getAttribute("userId")).thenReturn(20L);
+        when(userMapper.selectById(20L)).thenReturn(null);
+
+        ApiResponse<Map<String, Object>> response = controller.bindParent(9L, request);
+
+        assertEquals(404, response.getCode());
+        assertEquals("用户不存在", response.getMessage());
+        verify(redisTemplate, never()).opsForValue();
+    }
+
+    @Test
     void bindParentRejectsAlreadyBoundUser() {
         when(request.getAttribute("userId")).thenReturn(20L);
         User currentUser = user(20L, "13800138020", "当前用户");
@@ -88,6 +146,20 @@ class ReferralControllerTest {
 
         assertEquals(400, response.getCode());
         assertEquals("已绑定上级关系，无法修改", response.getMessage());
+        verify(redisTemplate, never()).opsForValue();
+        verify(userMapper, never()).updateById(any());
+    }
+
+    @Test
+    void bindParentRejectsMissingParent() {
+        when(request.getAttribute("userId")).thenReturn(20L);
+        User currentUser = user(20L, "13800138020", "当前用户");
+        when(userMapper.selectById(20L)).thenReturn(currentUser);
+
+        ApiResponse<Map<String, Object>> response = controller.bindParent(9L, request);
+
+        assertEquals(404, response.getCode());
+        assertEquals("上级用户不存在", response.getMessage());
         verify(redisTemplate, never()).opsForValue();
         verify(userMapper, never()).updateById(any());
     }
@@ -167,6 +239,53 @@ class ReferralControllerTest {
     }
 
     @Test
+    void bindParentTreatsZeroParentIdOnCurrentUserAsUnbound() {
+        when(request.getAttribute("userId")).thenReturn(20L);
+        User currentUser = user(20L, "13800138020", "当前用户");
+        currentUser.setParentId(0L);
+        User parent = user(9L, "13800138009", "上级用户");
+        parent.setTreePath("/0/1/");
+        parent.setStoreCount(1);
+        when(userMapper.selectById(20L)).thenReturn(currentUser);
+        when(userMapper.selectById(9L)).thenReturn(parent);
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.setIfAbsent(eq("referral:lock:20"), eq("1"), anyLong(), eq(TimeUnit.MINUTES)))
+                .thenReturn(true);
+
+        ApiResponse<Map<String, Object>> response = controller.bindParent(9L, request);
+
+        assertEquals(200, response.getCode());
+        assertEquals(9L, currentUser.getParentId());
+        assertEquals("/0/1/9/", currentUser.getTreePath());
+        assertEquals(2, parent.getStoreCount());
+        verify(redisTemplate).delete("referral:lock:20");
+    }
+
+    @Test
+    void bindParentUsesDefaultParentTreePathAndIncrementsExistingStoreCount() {
+        when(request.getAttribute("userId")).thenReturn(20L);
+        User currentUser = user(20L, "13800138020", "当前用户");
+        User parent = user(9L, "13800138009", "上级用户");
+        parent.setTreePath(null);
+        parent.setStoreCount(2);
+        when(userMapper.selectById(20L)).thenReturn(currentUser);
+        when(userMapper.selectById(9L)).thenReturn(parent);
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.setIfAbsent(eq("referral:lock:20"), eq("1"), anyLong(), eq(TimeUnit.MINUTES)))
+                .thenReturn(true);
+
+        ApiResponse<Map<String, Object>> response = controller.bindParent(9L, request);
+
+        assertEquals(200, response.getCode());
+        assertEquals("/0/9/", response.getData().get("treePath"));
+        assertEquals("/0/9/", currentUser.getTreePath());
+        assertEquals(3, parent.getStoreCount());
+        verify(userMapper).updateById(currentUser);
+        verify(userMapper).updateById(parent);
+        verify(redisTemplate).delete("referral:lock:20");
+    }
+
+    @Test
     void lockParentRejectsInvalidMobile() {
         ApiResponse<Map<String, Object>> response = controller.lockParent(Map.of(
                 "mobile", "123",
@@ -175,6 +294,53 @@ class ReferralControllerTest {
         assertEquals(400, response.getCode());
         assertEquals("手机号格式不正确", response.getMessage());
         verify(userMapper, never()).selectById(any());
+    }
+
+    @Test
+    void lockParentRejectsMissingMobile() {
+        Map<String, Object> body = new HashMap<>();
+        body.put("parentId", 9);
+
+        ApiResponse<Map<String, Object>> response = controller.lockParent(body);
+
+        assertEquals(400, response.getCode());
+        assertEquals("手机号格式不正确", response.getMessage());
+        verify(userMapper, never()).selectById(any());
+    }
+
+    @Test
+    void lockParentRejectsInvalidParentId() {
+        ApiResponse<Map<String, Object>> response = controller.lockParent(Map.of(
+                "mobile", "13800138020",
+                "parentId", 0));
+
+        assertEquals(400, response.getCode());
+        assertEquals("上级ID无效", response.getMessage());
+        verify(userMapper, never()).selectById(any());
+    }
+
+    @Test
+    void lockParentRejectsUnsupportedParentIdType() {
+        ApiResponse<Map<String, Object>> response = controller.lockParent(Map.of(
+                "mobile", "13800138020",
+                "parentId", "9"));
+
+        assertEquals(400, response.getCode());
+        assertEquals("上级ID无效", response.getMessage());
+        verify(userMapper, never()).selectById(any());
+    }
+
+    @Test
+    void lockParentRejectsMissingParent() {
+        when(userMapper.selectById(9L)).thenReturn(null);
+
+        ApiResponse<Map<String, Object>> response = controller.lockParent(Map.of(
+                "mobile", "13800138020",
+                "parentId", 9L));
+
+        assertEquals(404, response.getCode());
+        assertEquals("上级用户不存在，请检查二维码", response.getMessage());
+        verify(redisTemplate, never()).opsForValue();
     }
 
     @Test
@@ -192,6 +358,21 @@ class ReferralControllerTest {
         assertEquals(9L, response.getData().get("parentId"));
         assertEquals("上级用户", response.getData().get("parentNickname"));
         assertTrue((Boolean) response.getData().get("locked"));
+        verify(valueOperations).set(eq("invite:bind:13800138020"), any(), eq(30L), eq(TimeUnit.MINUTES));
+    }
+
+    @Test
+    void lockParentAcceptsLongParentId() {
+        User parent = user(9L, "13800138009", "上级用户");
+        when(userMapper.selectById(9L)).thenReturn(parent);
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+
+        ApiResponse<Map<String, Object>> response = controller.lockParent(Map.of(
+                "mobile", "13800138020",
+                "parentId", 9L));
+
+        assertEquals(200, response.getCode());
+        assertEquals(9L, response.getData().get("parentId"));
         verify(valueOperations).set(eq("invite:bind:13800138020"), any(), eq(30L), eq(TimeUnit.MINUTES));
     }
 
