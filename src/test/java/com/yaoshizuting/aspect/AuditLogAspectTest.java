@@ -3,6 +3,7 @@ package com.yaoshizuting.aspect;
 import com.yaoshizuting.entity.AuditLog;
 import com.yaoshizuting.mapper.AuditLogMapper;
 import org.aspectj.lang.ProceedingJoinPoint;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -11,6 +12,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.web.context.request.RequestAttributes;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
@@ -32,6 +34,11 @@ class AuditLogAspectTest {
     @BeforeEach
     void setUp() {
         aspect = new AuditLogAspect(auditLogMapper);
+    }
+
+    @AfterEach
+    void tearDown() {
+        RequestContextHolder.resetRequestAttributes();
     }
 
     @Test
@@ -106,6 +113,107 @@ class AuditLogAspectTest {
     }
 
     @Test
+    void logAfterReturningWithNullArgsSavesLogWithoutParams() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setRequestURI("/api/admin/audit");
+        request.setMethod("GET");
+        request.setRemoteAddr("127.0.0.1");
+
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
+
+        com.yaoshizuting.annotation.AuditLog auditLogAnnotation =
+            mock(com.yaoshizuting.annotation.AuditLog.class);
+        when(auditLogAnnotation.module()).thenReturn("审计日志");
+        when(auditLogAnnotation.operation()).thenReturn("查询审计日志");
+        when(joinPoint.getArgs()).thenReturn(null);
+        when(auditLogMapper.insert(any(AuditLog.class))).thenReturn(1);
+
+        aspect.logAfterReturning(joinPoint, auditLogAnnotation);
+
+        ArgumentCaptor<AuditLog> logCaptor = ArgumentCaptor.forClass(AuditLog.class);
+        verify(auditLogMapper).insert(logCaptor.capture());
+        assertNull(logCaptor.getValue().getRequestParams());
+    }
+
+    @Test
+    void logAfterReturningUsesXRealIpWhenForwardedForIsUnknown() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setRemoteAddr("10.0.0.1");
+        request.addHeader("X-Forwarded-For", "unknown");
+        request.addHeader("X-Real-IP", "198.51.100.9");
+        request.setRequestURI("/api/test");
+
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
+
+        com.yaoshizuting.annotation.AuditLog auditLogAnnotation =
+            mock(com.yaoshizuting.annotation.AuditLog.class);
+        when(joinPoint.getArgs()).thenReturn(new Object[]{});
+        when(auditLogMapper.insert(any(AuditLog.class))).thenReturn(1);
+
+        aspect.logAfterReturning(joinPoint, auditLogAnnotation);
+
+        ArgumentCaptor<AuditLog> logCaptor = ArgumentCaptor.forClass(AuditLog.class);
+        verify(auditLogMapper).insert(logCaptor.capture());
+        assertEquals("198.51.100.9", logCaptor.getValue().getClientIp());
+    }
+
+    @Test
+    void logAfterReturningFallsBackToRemoteAddrWhenProxyHeadersAreUnknown() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setRemoteAddr("10.0.0.1");
+        request.addHeader("X-Forwarded-For", "unknown");
+        request.addHeader("X-Real-IP", "unknown");
+        request.setRequestURI("/api/test");
+
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
+
+        com.yaoshizuting.annotation.AuditLog auditLogAnnotation =
+            mock(com.yaoshizuting.annotation.AuditLog.class);
+        when(joinPoint.getArgs()).thenReturn(new Object[]{});
+        when(auditLogMapper.insert(any(AuditLog.class))).thenReturn(1);
+
+        aspect.logAfterReturning(joinPoint, auditLogAnnotation);
+
+        ArgumentCaptor<AuditLog> logCaptor = ArgumentCaptor.forClass(AuditLog.class);
+        verify(auditLogMapper).insert(logCaptor.capture());
+        assertEquals("10.0.0.1", logCaptor.getValue().getClientIp());
+    }
+
+    @Test
+    void logAfterReturningFallsBackToRemoteAddrWhenProxyHeadersAreEmpty() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setRemoteAddr("10.0.0.2");
+        request.addHeader("X-Forwarded-For", "");
+        request.addHeader("X-Real-IP", "");
+        request.setRequestURI("/api/test");
+
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
+
+        com.yaoshizuting.annotation.AuditLog auditLogAnnotation =
+            mock(com.yaoshizuting.annotation.AuditLog.class);
+        when(joinPoint.getArgs()).thenReturn(new Object[]{});
+        when(auditLogMapper.insert(any(AuditLog.class))).thenReturn(1);
+
+        aspect.logAfterReturning(joinPoint, auditLogAnnotation);
+
+        ArgumentCaptor<AuditLog> logCaptor = ArgumentCaptor.forClass(AuditLog.class);
+        verify(auditLogMapper).insert(logCaptor.capture());
+        assertEquals("10.0.0.2", logCaptor.getValue().getClientIp());
+    }
+
+    @Test
+    void logAfterReturningWithInvalidRequestAttributesDoesNotSave() {
+        RequestContextHolder.setRequestAttributes(mock(RequestAttributes.class));
+
+        com.yaoshizuting.annotation.AuditLog auditLogAnnotation =
+            mock(com.yaoshizuting.annotation.AuditLog.class);
+
+        aspect.logAfterReturning(joinPoint, auditLogAnnotation);
+
+        verify(auditLogMapper, never()).insert(any());
+    }
+
+    @Test
     void testLogAfterReturning_WithException_LogsError() {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.setRequestURI("/api/test");
@@ -149,5 +257,13 @@ class AuditLogAspectTest {
         verify(auditLogMapper).insert(logCaptor.capture());
         assertTrue(logCaptor.getValue().getRequestParams().contains("\"filename\":\"product.png\""));
         assertTrue(logCaptor.getValue().getRequestParams().contains("\"size\":3"));
+    }
+
+    @Test
+    void saveLogAsyncSwallowsInsertFailure() {
+        AuditLog auditRecord = new AuditLog();
+        when(auditLogMapper.insert(auditRecord)).thenThrow(new RuntimeException("db unavailable"));
+
+        assertDoesNotThrow(() -> aspect.saveLogAsync(auditRecord));
     }
 }
