@@ -141,6 +141,78 @@ public class ProfitServiceImplTest {
     }
 
     @Test
+    void processJoinStoreProfitSkipsRewardWhenParentMissing() {
+        User newUser = user(10L, UserRole.MEMBER, "0.00", "0.00");
+        newUser.setParentId(99L);
+        Order order = order("ORD-STORE-MISSING-PARENT", newUser.getId(), OrderStatus.PAID.getCode());
+        when(userMapper.selectById(newUser.getId())).thenReturn(newUser);
+        when(userMapper.selectById(99L)).thenReturn(null);
+
+        profitService.processJoinStoreProfit(order);
+
+        assertEquals(UserRole.STORE.getCode(), newUser.getRole());
+        verify(profitLogMapper, never()).insert(any());
+        verify(lockService, never()).tryLock(anyString(), anyLong(), anyLong());
+    }
+
+    @Test
+    void processJoinStoreProfitRewardsAgentParentAndSkipsBlankTreePath() {
+        User parentAgent = user(2L, UserRole.AGENT, "10.00", "20.00");
+        User newUser = user(10L, UserRole.MEMBER, "0.00", "0.00");
+        newUser.setParentId(parentAgent.getId());
+        newUser.setTreePath(" ");
+        Order order = order("ORD-STORE-AGENT-PARENT", newUser.getId(), OrderStatus.PAID.getCode());
+
+        when(userMapper.selectById(newUser.getId())).thenReturn(newUser);
+        when(userMapper.selectById(parentAgent.getId())).thenReturn(parentAgent, parentAgent);
+        when(policyConfigService.getConfigValue("AGENT_REWARD_DIRECT")).thenReturn(new BigDecimal("7000.00"));
+        when(lockService.tryLock(anyString(), anyLong(), anyLong())).thenReturn(true);
+        when(userMapper.updateById(any(User.class))).thenReturn(1);
+
+        profitService.processJoinStoreProfit(order);
+
+        assertEquals(new BigDecimal("7010.00"), parentAgent.getBalance());
+        assertEquals(new BigDecimal("7020.00"), parentAgent.getTotalEarnings());
+        verify(profitLogMapper).insert(any(ProfitLog.class));
+    }
+
+    @Test
+    void processJoinStoreProfitSkipsShortTreePathAndZeroDirectReward() {
+        User parentStore = user(3L, UserRole.STORE, "0.00", "0.00");
+        User newUser = user(10L, UserRole.MEMBER, "0.00", "0.00");
+        newUser.setParentId(parentStore.getId());
+        newUser.setTreePath("/");
+        Order order = order("ORD-STORE-SHORT-PATH", newUser.getId(), OrderStatus.PAID.getCode());
+
+        when(userMapper.selectById(newUser.getId())).thenReturn(newUser);
+        when(userMapper.selectById(parentStore.getId())).thenReturn(parentStore);
+        when(policyConfigService.getConfigValue("STORE_REWARD_DIRECT")).thenReturn(BigDecimal.ZERO);
+
+        profitService.processJoinStoreProfit(order);
+
+        verify(profitLogMapper, never()).insert(any());
+        verify(lockService, never()).tryLock(anyString(), anyLong(), anyLong());
+    }
+
+    @Test
+    void processJoinStoreProfitIgnoresInvalidAncestorPath() {
+        User parentStore = user(3L, UserRole.STORE, "0.00", "0.00");
+        User newUser = user(10L, UserRole.MEMBER, "0.00", "0.00");
+        newUser.setParentId(parentStore.getId());
+        newUser.setTreePath("/abc/3/");
+        Order order = order("ORD-STORE-BAD-PATH", newUser.getId(), OrderStatus.PAID.getCode());
+
+        when(userMapper.selectById(newUser.getId())).thenReturn(newUser);
+        when(userMapper.selectById(parentStore.getId())).thenReturn(parentStore);
+        when(policyConfigService.getConfigValue("STORE_REWARD_DIRECT")).thenReturn(BigDecimal.ZERO);
+
+        profitService.processJoinStoreProfit(order);
+
+        verify(profitLogMapper, never()).insert(any());
+        verify(lockService, never()).tryLock(anyString(), anyLong(), anyLong());
+    }
+
+    @Test
     void processJoinAgentProfitSkipsUnpaidOrder() {
         Order order = order("ORD-AGENT-PENDING", 20L, OrderStatus.PENDING.getCode());
 
@@ -189,6 +261,72 @@ public class ProfitServiceImplTest {
     }
 
     @Test
+    void processJoinAgentProfitPromotesUserWithoutParentAndSkipsProfit() {
+        User newAgent = user(40L, UserRole.MEMBER, "0.00", "0.00");
+        newAgent.setParentId(null);
+        Order order = order("ORD-AGENT-NO-PARENT", newAgent.getId(), OrderStatus.PAID.getCode());
+        when(userMapper.selectById(newAgent.getId())).thenReturn(newAgent);
+
+        profitService.processJoinAgentProfit(order);
+
+        assertEquals(UserRole.AGENT.getCode(), newAgent.getRole());
+        verify(profitLogMapper, never()).insert(any());
+        verify(lockService, never()).tryLock(anyString(), anyLong(), anyLong());
+    }
+
+    @Test
+    void processJoinAgentProfitSkipsRewardWhenParentMissing() {
+        User newAgent = user(40L, UserRole.MEMBER, "0.00", "0.00");
+        newAgent.setParentId(99L);
+        Order order = order("ORD-AGENT-MISSING-PARENT", newAgent.getId(), OrderStatus.PAID.getCode());
+        when(userMapper.selectById(newAgent.getId())).thenReturn(newAgent);
+        when(userMapper.selectById(99L)).thenReturn(null);
+
+        profitService.processJoinAgentProfit(order);
+
+        assertEquals(UserRole.AGENT.getCode(), newAgent.getRole());
+        verify(profitLogMapper, never()).insert(any());
+        verify(lockService, never()).tryLock(anyString(), anyLong(), anyLong());
+    }
+
+    @Test
+    void processJoinAgentProfitRewardsAgentParent() {
+        User parentAgent = user(30L, UserRole.AGENT, "100.00", "200.00");
+        User newAgent = user(40L, UserRole.MEMBER, "0.00", "0.00");
+        newAgent.setParentId(parentAgent.getId());
+        Order order = order("ORD-AGENT-AGENT-PARENT", newAgent.getId(), OrderStatus.PAID.getCode());
+
+        when(userMapper.selectById(newAgent.getId())).thenReturn(newAgent);
+        when(userMapper.selectById(parentAgent.getId())).thenReturn(parentAgent, parentAgent);
+        when(policyConfigService.getConfigValue("AGENT_REWARD_DIRECT_AGENT")).thenReturn(new BigDecimal("6000.00"));
+        when(lockService.tryLock(anyString(), anyLong(), anyLong())).thenReturn(true);
+        when(userMapper.updateById(any(User.class))).thenReturn(1);
+
+        profitService.processJoinAgentProfit(order);
+
+        assertEquals(new BigDecimal("6100.00"), parentAgent.getBalance());
+        assertEquals(new BigDecimal("6200.00"), parentAgent.getTotalEarnings());
+        verify(profitLogMapper).insert(any(ProfitLog.class));
+    }
+
+    @Test
+    void processJoinAgentProfitSkipsUnsupportedParentRole() {
+        User parentMember = user(30L, UserRole.MEMBER, "100.00", "200.00");
+        User newAgent = user(40L, UserRole.MEMBER, "0.00", "0.00");
+        newAgent.setParentId(parentMember.getId());
+        Order order = order("ORD-AGENT-UNSUPPORTED-PARENT", newAgent.getId(), OrderStatus.PAID.getCode());
+
+        when(userMapper.selectById(newAgent.getId())).thenReturn(newAgent);
+        when(userMapper.selectById(parentMember.getId())).thenReturn(parentMember);
+
+        profitService.processJoinAgentProfit(order);
+
+        assertEquals(UserRole.AGENT.getCode(), newAgent.getRole());
+        verify(profitLogMapper, never()).insert(any());
+        verify(lockService, never()).tryLock(anyString(), anyLong(), anyLong());
+    }
+
+    @Test
     void processJoinPartnerProfitRejectsMissingUser() {
         Order order = order("ORD-PARTNER-MISSING", 40L, OrderStatus.PAID.getCode());
         when(userMapper.selectById(40L)).thenReturn(null);
@@ -199,6 +337,52 @@ public class ProfitServiceImplTest {
 
         assertEquals("用户不存在", exception.getMessage());
         verify(userMapper, never()).updateById(any());
+    }
+
+    @Test
+    void processJoinPartnerProfitPromotesUserWithoutParentAndSkipsProfit() {
+        User newPartner = user(40L, UserRole.MEMBER, "0.00", "0.00");
+        newPartner.setParentId(null);
+        Order order = order("ORD-PARTNER-NO-PARENT", newPartner.getId(), OrderStatus.PAID.getCode());
+        when(userMapper.selectById(newPartner.getId())).thenReturn(newPartner);
+
+        profitService.processJoinPartnerProfit(order);
+
+        assertEquals(UserRole.PARTNER.getCode(), newPartner.getRole());
+        verify(profitLogMapper, never()).insert(any());
+        verify(lockService, never()).tryLock(anyString(), anyLong(), anyLong());
+    }
+
+    @Test
+    void processJoinPartnerProfitSkipsRewardWhenParentMissing() {
+        User newPartner = user(40L, UserRole.MEMBER, "0.00", "0.00");
+        newPartner.setParentId(99L);
+        Order order = order("ORD-PARTNER-MISSING-PARENT", newPartner.getId(), OrderStatus.PAID.getCode());
+        when(userMapper.selectById(newPartner.getId())).thenReturn(newPartner);
+        when(userMapper.selectById(99L)).thenReturn(null);
+
+        profitService.processJoinPartnerProfit(order);
+
+        assertEquals(UserRole.PARTNER.getCode(), newPartner.getRole());
+        verify(profitLogMapper, never()).insert(any());
+        verify(lockService, never()).tryLock(anyString(), anyLong(), anyLong());
+    }
+
+    @Test
+    void processJoinPartnerProfitSkipsUnsupportedParentRole() {
+        User parentStore = user(30L, UserRole.STORE, "100.00", "200.00");
+        User newPartner = user(40L, UserRole.MEMBER, "0.00", "0.00");
+        newPartner.setParentId(parentStore.getId());
+        Order order = order("ORD-PARTNER-UNSUPPORTED-PARENT", newPartner.getId(), OrderStatus.PAID.getCode());
+
+        when(userMapper.selectById(newPartner.getId())).thenReturn(newPartner);
+        when(userMapper.selectById(parentStore.getId())).thenReturn(parentStore);
+
+        profitService.processJoinPartnerProfit(order);
+
+        assertEquals(UserRole.PARTNER.getCode(), newPartner.getRole());
+        verify(profitLogMapper, never()).insert(any());
+        verify(lockService, never()).tryLock(anyString(), anyLong(), anyLong());
     }
 
     @Test
@@ -217,6 +401,25 @@ public class ProfitServiceImplTest {
         assertEquals(new BigDecimal("39800.00"), partner.getBalance());
         verify(policyConfigService, never()).getConfigValue("HEADQUARTER_SUPPORT_FEE");
         verify(profitLogMapper).insert(any(ProfitLog.class));
+    }
+
+    @Test
+    void processPartnerRecruitAgentProfitSkipsLogWhenLockUnavailableAndBalanceUserMissing() {
+        User partner = user(1L, UserRole.PARTNER, "0.00", "0.00");
+        partner.setAgentCount(null);
+        User newAgent = user(200L, UserRole.AGENT, "0.00", "0.00");
+
+        when(policyConfigService.getConfigValue("PARTNER_MANAGE_FEE")).thenReturn(new BigDecimal("39800.00"));
+        when(lockService.tryLock(anyString(), anyLong(), anyLong())).thenReturn(false);
+        when(userMapper.selectById(partner.getId())).thenReturn(null);
+
+        profitService.processPartnerRecruitAgentProfit(partner, newAgent);
+
+        assertEquals(1, partner.getAgentCount());
+        assertEquals(new BigDecimal("0.00"), partner.getBalance());
+        verify(profitLogMapper, never()).insert(any());
+        verify(lockService).unlock(anyString());
+        verify(userMapper).updateById(partner);
     }
 
     @Test
