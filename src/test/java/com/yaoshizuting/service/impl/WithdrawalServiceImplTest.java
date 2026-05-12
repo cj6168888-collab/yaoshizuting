@@ -17,6 +17,7 @@ import java.math.BigDecimal;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
@@ -84,6 +85,25 @@ class WithdrawalServiceImplTest {
     }
 
     @Test
+    void createWithdrawalRejectsMissingUser() {
+        when(userMapper.selectById(10L)).thenReturn(null);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> withdrawalService.createWithdrawal(
+                        10L,
+                        new BigDecimal("200.00"),
+                        1,
+                        "account-no",
+                        "account-name",
+                        null));
+
+        assertEquals("用户不存在", exception.getMessage());
+        verify(policyConfigService, never()).getConfigValue(any());
+        verify(withdrawalMapper, never()).insert(any());
+    }
+
+    @Test
     void createWithdrawalRejectsInsufficientBalance() {
         when(userMapper.selectById(10L)).thenReturn(buildUser(10L, "50.00"));
         when(policyConfigService.getConfigValue("WITHDRAWAL_MIN_AMOUNT")).thenReturn(new BigDecimal("10.00"));
@@ -116,6 +136,43 @@ class WithdrawalServiceImplTest {
     }
 
     @Test
+    void approveWithdrawalAllowsNullRemark() {
+        Withdrawal withdrawal = buildWithdrawal(1L, 10L, "200.00", 0);
+        when(withdrawalMapper.selectById(1L)).thenReturn(withdrawal);
+
+        withdrawalService.approveWithdrawal(1L, true, null);
+
+        assertEquals(1, withdrawal.getStatus());
+        assertNull(withdrawal.getRemark());
+        assertNotNull(withdrawal.getAuditTime());
+        verify(withdrawalMapper).updateById(withdrawal);
+    }
+
+    @Test
+    void approveWithdrawalRejectsMissingRecord() {
+        when(withdrawalMapper.selectById(1L)).thenReturn(null);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> withdrawalService.approveWithdrawal(1L, true, "审核通过"));
+
+        assertEquals("提现记录不存在", exception.getMessage());
+        verify(withdrawalMapper, never()).updateById(any());
+    }
+
+    @Test
+    void approveWithdrawalRejectsNonPendingRequest() {
+        when(withdrawalMapper.selectById(1L)).thenReturn(buildWithdrawal(1L, 10L, "200.00", 2));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> withdrawalService.approveWithdrawal(1L, true, "审核通过"));
+
+        assertEquals("该提现申请状态异常", exception.getMessage());
+        verify(withdrawalMapper, never()).updateById(any());
+    }
+
+    @Test
     void approveWithdrawalRejectPathRefundsBalance() {
         Withdrawal withdrawal = buildWithdrawal(1L, 10L, "200.00", 0);
         User user = buildUser(10L, "800.00");
@@ -145,6 +202,18 @@ class WithdrawalServiceImplTest {
     }
 
     @Test
+    void completeWithdrawalRejectsMissingRecord() {
+        when(withdrawalMapper.selectById(1L)).thenReturn(null);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> withdrawalService.completeWithdrawal(1L, "TX-001"));
+
+        assertEquals("提现记录不存在", exception.getMessage());
+        verify(withdrawalMapper, never()).updateById(any());
+    }
+
+    @Test
     void completeWithdrawalRejectsNonApprovedRequest() {
         when(withdrawalMapper.selectById(1L)).thenReturn(buildWithdrawal(1L, 10L, "200.00", 0));
 
@@ -171,6 +240,47 @@ class WithdrawalServiceImplTest {
         assertEquals(3, captor.getValue().getStatus());
         assertEquals("主动驳回", captor.getValue().getRemark());
         assertNotNull(captor.getValue().getAuditTime());
+    }
+
+    @Test
+    void rejectWithdrawalRejectsMissingRecord() {
+        when(withdrawalMapper.selectById(1L)).thenReturn(null);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> withdrawalService.rejectWithdrawal(1L, "主动驳回"));
+
+        assertEquals("提现记录不存在", exception.getMessage());
+        verify(userMapper, never()).selectById(any());
+        verify(withdrawalMapper, never()).updateById(any());
+    }
+
+    @Test
+    void rejectWithdrawalRejectsNonPendingRequest() {
+        when(withdrawalMapper.selectById(1L)).thenReturn(buildWithdrawal(1L, 10L, "200.00", 2));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> withdrawalService.rejectWithdrawal(1L, "主动驳回"));
+
+        assertEquals("该提现申请状态异常", exception.getMessage());
+        verify(userMapper, never()).selectById(any());
+        verify(withdrawalMapper, never()).updateById(any());
+    }
+
+    @Test
+    void rejectWithdrawalStillUpdatesStatusWhenUserIsMissing() {
+        Withdrawal withdrawal = buildWithdrawal(1L, 10L, "200.00", 0);
+        when(withdrawalMapper.selectById(1L)).thenReturn(withdrawal);
+        when(userMapper.selectById(10L)).thenReturn(null);
+
+        withdrawalService.rejectWithdrawal(1L, "用户已删除");
+
+        assertEquals(3, withdrawal.getStatus());
+        assertEquals("用户已删除", withdrawal.getRemark());
+        assertNotNull(withdrawal.getAuditTime());
+        verify(userMapper, never()).updateById(any());
+        verify(withdrawalMapper).updateById(withdrawal);
     }
 
     private User buildUser(Long id, String balance) {
