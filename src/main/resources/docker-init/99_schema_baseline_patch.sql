@@ -12,6 +12,18 @@ CREATE INDEX `idx_profit_receiver_time`
 CREATE INDEX `idx_withdrawal_user_status`
     ON `gyt_withdrawal` (`user_id`, `status`);
 
+CREATE INDEX `idx_user_role_status_time`
+    ON `gyt_user` (`deleted`, `role`, `status`, `create_time`);
+
+CREATE INDEX `idx_product_type_status_time`
+    ON `gyt_product` (`deleted`, `product_type`, `status`, `update_time`);
+
+CREATE INDEX `idx_withdrawal_status_time`
+    ON `gyt_withdrawal` (`deleted`, `status`, `create_time`);
+
+CREATE INDEX `idx_profit_type_time`
+    ON `gyt_profit_log` (`deleted`, `type`, `create_time`);
+
 CREATE TABLE IF NOT EXISTS `gyt_audit_log` (
     `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT 'primary key',
     `module` VARCHAR(50) DEFAULT NULL COMMENT 'module',

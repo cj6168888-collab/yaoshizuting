@@ -31,7 +31,8 @@ CREATE TABLE gyt_user (
     UNIQUE KEY uk_mobile (mobile),
     KEY idx_user_parent_id (parent_id),
     KEY idx_user_tree_path (tree_path),
-    KEY idx_user_role (role)
+    KEY idx_user_role (role),
+    KEY idx_user_role_status_time (deleted, role, status, create_time)
 );
 
 CREATE TABLE gyt_config_policy (
@@ -101,7 +102,8 @@ CREATE TABLE gyt_profit_log (
     UNIQUE KEY uk_order_type_receiver (order_sn, type, receiver_id),
     KEY idx_profit_receiver_id (receiver_id),
     KEY idx_profit_contributor_id (contributor_id),
-    KEY idx_profit_receiver_time (receiver_id, create_time)
+    KEY idx_profit_receiver_time (receiver_id, create_time),
+    KEY idx_profit_type_time (deleted, type, create_time)
 );
 
 CREATE TABLE gyt_product (
@@ -123,7 +125,8 @@ CREATE TABLE gyt_product (
     deleted TINYINT DEFAULT 0,
     PRIMARY KEY (id),
     UNIQUE KEY uk_product_code (product_code),
-    KEY idx_product_product_type (product_type)
+    KEY idx_product_product_type (product_type),
+    KEY idx_product_type_status_time (deleted, product_type, status, update_time)
 );
 
 CREATE TABLE gyt_withdrawal (
@@ -148,7 +151,8 @@ CREATE TABLE gyt_withdrawal (
     UNIQUE KEY uk_withdraw_sn (withdraw_sn),
     KEY idx_withdrawal_user_id (user_id),
     KEY idx_withdrawal_status (status),
-    KEY idx_withdrawal_user_status (user_id, status)
+    KEY idx_withdrawal_user_status (user_id, status),
+    KEY idx_withdrawal_status_time (deleted, status, create_time)
 );
 
 CREATE TABLE gyt_audit_log (
