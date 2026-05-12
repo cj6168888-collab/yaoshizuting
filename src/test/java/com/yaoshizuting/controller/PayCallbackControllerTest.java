@@ -16,6 +16,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -170,6 +171,186 @@ class PayCallbackControllerTest {
 
         verify(orderService).updateOrderStatus("ORD-ALI-001", OrderStatus.PAID.getCode(), "ALI-TX-001");
         verify(profitService).processJoinAgentProfit(order);
+    }
+
+    @Test
+    void alipayNotify_WithBlockedIp_ReturnsBusinessErrorWithoutSignatureCheck() throws Exception {
+        when(signatureService.isAllowedIP("10.0.0.9")).thenReturn(false);
+
+        mockMvc.perform(post("/v1/pay/alipay/notify")
+                .param("out_trade_no", "ORD-ALI-BLOCKED")
+                .with(request -> {
+                    request.setRemoteAddr("10.0.0.9");
+                    return request;
+                }))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(500))
+                .andExpect(jsonPath("$.message").value("Forbidden"));
+
+        verify(signatureService, never()).verifyAlipaySignature(anyMap());
+        verifyNoInteractions(orderService, profitService);
+    }
+
+    @Test
+    void alipayNotify_WithInvalidSignature_ReturnsBusinessError() throws Exception {
+        when(signatureService.isAllowedIP("127.0.0.1")).thenReturn(true);
+        when(signatureService.verifyAlipaySignature(anyMap())).thenReturn(false);
+
+        mockMvc.perform(post("/v1/pay/alipay/notify")
+                .param("out_trade_no", "ORD-ALI-SIG")
+                .param("trade_status", "TRADE_SUCCESS")
+                .with(request -> {
+                    request.setRemoteAddr("127.0.0.1");
+                    return request;
+                }))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(500))
+                .andExpect(jsonPath("$.message").value("Signature verification failed"));
+
+        verifyNoInteractions(orderService, profitService);
+    }
+
+    @Test
+    void alipayNotify_WithUnsuccessfulTradeStatus_DoesNotLookupOrder() throws Exception {
+        when(signatureService.isAllowedIP("127.0.0.1")).thenReturn(true);
+        when(signatureService.verifyAlipaySignature(anyMap())).thenReturn(true);
+
+        mockMvc.perform(post("/v1/pay/alipay/notify")
+                .param("out_trade_no", "ORD-ALI-WAIT")
+                .param("trade_no", "ALI-TX-WAIT")
+                .param("trade_status", "WAIT_BUYER_PAY")
+                .with(request -> {
+                    request.setRemoteAddr("127.0.0.1");
+                    return request;
+                }))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(200));
+
+        verifyNoInteractions(orderService, profitService);
+    }
+
+    @Test
+    void wechatNotify_WithInvalidPayload_DoesNotLookupOrder() throws Exception {
+        String body = "not-json";
+
+        when(signatureService.isAllowedIP("127.0.0.1")).thenReturn(true);
+        when(signatureService.verifyWechatSignature("sig", body, "ts", "nonce")).thenReturn(true);
+
+        mockMvc.perform(post("/v1/pay/wechat/notify")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body)
+                .header("Wechatpay-Signature", "sig")
+                .header("Wechatpay-Timestamp", "ts")
+                .header("Wechatpay-Nonce", "nonce")
+                .with(request -> {
+                    request.setRemoteAddr("127.0.0.1");
+                    return request;
+                }))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(200));
+
+        verifyNoInteractions(orderService, profitService);
+    }
+
+    @Test
+    void wechatNotify_WithMissingOrder_ReturnsOrderNotFound() throws Exception {
+        String body = """
+                {"out_trade_no":"ORD-MISSING","transaction_id":"WX-TX-MISSING","result_code":"SUCCESS"}
+                """;
+
+        when(signatureService.isAllowedIP("127.0.0.1")).thenReturn(true);
+        when(signatureService.verifyWechatSignature("sig", body.trim(), "ts", "nonce")).thenReturn(true);
+        when(orderService.getOrderByOrderSn("ORD-MISSING")).thenReturn(null);
+
+        mockMvc.perform(post("/v1/pay/wechat/notify")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body)
+                .header("Wechatpay-Signature", "sig")
+                .header("Wechatpay-Timestamp", "ts")
+                .header("Wechatpay-Nonce", "nonce")
+                .with(request -> {
+                    request.setRemoteAddr("127.0.0.1");
+                    return request;
+                }))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(500))
+                .andExpect(jsonPath("$.message").value("Order not found"));
+
+        verify(orderService, never()).updateOrderStatus("ORD-MISSING", OrderStatus.PAID.getCode(), "WX-TX-MISSING");
+        verifyNoInteractions(profitService);
+    }
+
+    @Test
+    void wechatNotify_WithForwardedFor_UsesFirstClientIpAndTriggersPartnerProfit() throws Exception {
+        String body = """
+                {"out_trade_no":"ORD-WX-PARTNER","transaction_id":"WX-TX-PARTNER","result_code":"SUCCESS"}
+                """;
+        Order order = buildOrder("ORD-WX-PARTNER", 3, OrderStatus.PENDING.getCode());
+
+        when(signatureService.isAllowedIP("203.0.113.10")).thenReturn(true);
+        when(signatureService.verifyWechatSignature("sig", body.trim(), "ts", "nonce")).thenReturn(true);
+        when(orderService.getOrderByOrderSn("ORD-WX-PARTNER")).thenReturn(order);
+
+        mockMvc.perform(post("/v1/pay/wechat/notify")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body)
+                .header("X-Forwarded-For", "203.0.113.10, 10.0.0.2")
+                .header("Wechatpay-Signature", "sig")
+                .header("Wechatpay-Timestamp", "ts")
+                .header("Wechatpay-Nonce", "nonce"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(200));
+
+        verify(orderService).updateOrderStatus("ORD-WX-PARTNER", OrderStatus.PAID.getCode(), "WX-TX-PARTNER");
+        verify(profitService).processJoinPartnerProfit(order);
+    }
+
+    @Test
+    void alipayNotify_WithRealIpHeader_UsesRealIpAndSkipsUnknownOrderType() throws Exception {
+        Order order = buildOrder("ORD-ALI-UNKNOWN", 99, OrderStatus.PENDING.getCode());
+
+        when(signatureService.isAllowedIP("198.51.100.8")).thenReturn(true);
+        when(signatureService.verifyAlipaySignature(anyMap())).thenReturn(true);
+        when(orderService.getOrderByOrderSn("ORD-ALI-UNKNOWN")).thenReturn(order);
+
+        mockMvc.perform(post("/v1/pay/alipay/notify")
+                .header("X-Real-IP", "198.51.100.8")
+                .param("out_trade_no", "ORD-ALI-UNKNOWN")
+                .param("trade_no", "ALI-TX-UNKNOWN")
+                .param("trade_status", "TRADE_FINISHED")
+                .with(request -> {
+                    request.setRemoteAddr("127.0.0.1");
+                    return request;
+                }))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(200));
+
+        verify(orderService).updateOrderStatus("ORD-ALI-UNKNOWN", OrderStatus.PAID.getCode(), "ALI-TX-UNKNOWN");
+        verifyNoInteractions(profitService);
+    }
+
+    @Test
+    void alipayNotify_WhenProfitDistributionFails_StillReturnsSuccess() throws Exception {
+        Order order = buildOrder("ORD-ALI-PROFIT-FAIL", 3, OrderStatus.PENDING.getCode());
+
+        when(signatureService.isAllowedIP("127.0.0.1")).thenReturn(true);
+        when(signatureService.verifyAlipaySignature(anyMap())).thenReturn(true);
+        when(orderService.getOrderByOrderSn("ORD-ALI-PROFIT-FAIL")).thenReturn(order);
+        doThrow(new RuntimeException("profit failed")).when(profitService).processJoinPartnerProfit(order);
+
+        mockMvc.perform(post("/v1/pay/alipay/notify")
+                .param("out_trade_no", "ORD-ALI-PROFIT-FAIL")
+                .param("trade_no", "ALI-TX-PROFIT-FAIL")
+                .param("trade_status", "TRADE_SUCCESS")
+                .with(request -> {
+                    request.setRemoteAddr("127.0.0.1");
+                    return request;
+                }))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(200));
+
+        verify(orderService).updateOrderStatus("ORD-ALI-PROFIT-FAIL", OrderStatus.PAID.getCode(), "ALI-TX-PROFIT-FAIL");
+        verify(profitService).processJoinPartnerProfit(order);
     }
 
     private Order buildOrder(String orderSn, Integer orderType, Integer status) {
