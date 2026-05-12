@@ -22,6 +22,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -99,6 +100,35 @@ class AdminProductControllerTest {
     }
 
     @Test
+    void updateProduct_WithAdminToken_ReturnsUpdatedProduct() throws Exception {
+        ProductUpsertRequest request = buildRequest(nextProductCode());
+        String content = mockMvc.perform(post("/api/admin/product")
+                .contextPath("/api")
+                .header("Authorization", adminToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        Long id = objectMapper.readTree(content).path("data").path("id").asLong();
+
+        request.setProductName("更新后的商品");
+        request.setDescription("更新后的描述");
+        request.setStock(35);
+
+        mockMvc.perform(put("/api/admin/product/{id}", id)
+                .contextPath("/api")
+                .header("Authorization", adminToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.data.productName").value("更新后的商品"))
+                .andExpect(jsonPath("$.data.description").value("更新后的描述"))
+                .andExpect(jsonPath("$.data.stock").value(35));
+    }
+
+    @Test
     void updateStatus_WithAdminToken_UpdatesProductStatus() throws Exception {
         ProductUpsertRequest request = buildRequest(nextProductCode());
         String content = mockMvc.perform(post("/api/admin/product")
@@ -152,6 +182,30 @@ class AdminProductControllerTest {
                 .andExpect(jsonPath("$.data.total").value(1))
                 .andExpect(jsonPath("$.data.records[0].productCode").value(productCode))
                 .andExpect(jsonPath("$.data.records[0].status").value(0));
+    }
+
+    @Test
+    void exportProducts_WithAdminToken_ReturnsCsv() throws Exception {
+        String productCode = nextProductCode();
+        ProductUpsertRequest request = buildRequest(productCode);
+        mockMvc.perform(post("/api/admin/product")
+                .contextPath("/api")
+                .header("Authorization", adminToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/admin/product/export")
+                .contextPath("/api")
+                .header("Authorization", adminToken)
+                .param("keyword", productCode)
+                .param("productType", "2")
+                .param("status", "1"))
+                .andExpect(status().isOk())
+                .andExpect(result -> org.junit.jupiter.api.Assertions.assertTrue(
+                        result.getResponse().getHeader("Content-Disposition").contains("products.csv")))
+                .andExpect(result -> org.junit.jupiter.api.Assertions.assertTrue(
+                        result.getResponse().getContentAsString().contains(productCode)));
     }
 
     private String nextProductCode() {
