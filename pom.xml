@@ -24,6 +24,7 @@
         <jwt.version>0.12.3</jwt.version>
         <hutool.version>5.8.22</hutool.version>
         <lombok.version>1.18.30</lombok.version>
+        <jacoco.version>0.8.12</jacoco.version>
     </properties>
 
     <dependencies>
@@ -199,6 +200,25 @@
                         <ruleset>${project.basedir}/www/yaishizuting/pmd-rules.xml</ruleset>
                     </rulesets>
                 </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>${jacoco.version}</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>
