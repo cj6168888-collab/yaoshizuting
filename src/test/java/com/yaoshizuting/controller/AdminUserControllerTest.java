@@ -83,6 +83,40 @@ class AdminUserControllerTest {
     }
 
     @Test
+    void listUsers_WithRoleAndStatusFilters_ReturnsMatchingUsers() throws Exception {
+        mockMvc.perform(get("/api/admin/users")
+                .contextPath("/api")
+                .param("keyword", user.getMobile())
+                .param("role", "0")
+                .param("status", "1")
+                .param("size", "200")
+                .header("Authorization", adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.data.total").value(1))
+                .andExpect(jsonPath("$.data.records[0].mobile").value(user.getMobile()))
+                .andExpect(jsonPath("$.data.records[0].role").value(0))
+                .andExpect(jsonPath("$.data.records[0].status").value(1));
+    }
+
+    @Test
+    void exportUsers_WithAdminToken_ReturnsCsv() throws Exception {
+        mockMvc.perform(get("/api/admin/users/export")
+                .contextPath("/api")
+                .param("keyword", user.getMobile())
+                .param("role", "0")
+                .param("status", "1")
+                .header("Authorization", adminToken))
+                .andExpect(status().isOk())
+                .andExpect(result -> org.junit.jupiter.api.Assertions.assertTrue(
+                        result.getResponse().getHeader("Content-Disposition").contains("users.csv")))
+                .andExpect(result -> org.junit.jupiter.api.Assertions.assertTrue(
+                        result.getResponse().getContentAsString().contains(user.getMobile())))
+                .andExpect(result -> org.junit.jupiter.api.Assertions.assertTrue(
+                        result.getResponse().getContentAsString().contains(parentUser.getMobile())));
+    }
+
+    @Test
     void updateUser_WithAdminToken_UpdatesRoleAndStatus() throws Exception {
         mockMvc.perform(put("/api/admin/users/{id}", user.getId())
                 .contextPath("/api")
@@ -93,6 +127,42 @@ class AdminUserControllerTest {
                 .andExpect(jsonPath("$.code").value(200))
                 .andExpect(jsonPath("$.data.role").value(2))
                 .andExpect(jsonPath("$.data.status").value(0));
+    }
+
+    @Test
+    void updateUser_WithInvalidRole_ReturnsBusinessError() throws Exception {
+        mockMvc.perform(put("/api/admin/users/{id}", user.getId())
+                .contextPath("/api")
+                .header("Authorization", adminToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"role\":99}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(400))
+                .andExpect(jsonPath("$.message").value("用户角色无效"));
+    }
+
+    @Test
+    void updateUser_WithInvalidStatus_ReturnsBusinessError() throws Exception {
+        mockMvc.perform(put("/api/admin/users/{id}", user.getId())
+                .contextPath("/api")
+                .header("Authorization", adminToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"status\":2}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(400))
+                .andExpect(jsonPath("$.message").value("账号状态无效"));
+    }
+
+    @Test
+    void updateUser_WithMissingUser_ReturnsBusinessError() throws Exception {
+        mockMvc.perform(put("/api/admin/users/{id}", 99999999L)
+                .contextPath("/api")
+                .header("Authorization", adminToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"role\":1}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(404))
+                .andExpect(jsonPath("$.message").value("用户不存在"));
     }
 
     @Test
