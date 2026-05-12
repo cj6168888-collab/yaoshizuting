@@ -14,27 +14,19 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
-          cache: mvn
-
-      - name: Install Maven
-        run: sudo apt-get update && sudo apt-get install -y maven
-
-      - name: Cache Maven packages
-        uses: actions/cache@v3
-        with:
-          path: ~/.m2
-          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
-          restore-keys: ${{ runner.os }}-maven-
+          cache: maven
 
       - name: Build and test
-        run: mvn -B -DskipTests=false test
+        run: mvn -B -ntp -DskipTests=false test
+
       - name: Run Checkstyle
-        run: mvn -B -DskipTests=true checkstyle:check
+        run: mvn -B -ntp -DskipTests=true checkstyle:check
+
       - name: Run PMD
-        run: mvn -B -DskipTests=true pmd:check
+        run: mvn -B -ntp -DskipTests=true pmd:check
         env:
           MAVEN_OPTS: -Xmx1024m
