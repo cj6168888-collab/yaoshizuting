@@ -76,8 +76,11 @@ public class OrderServiceImplTest {
     void createStoreJoinOrderRejectsMissingUser() {
         when(userMapper.selectById(10L)).thenReturn(null);
 
-        assertThrows(BusinessException.class, () -> orderService.createStoreJoinOrder(10L, new JoinStoreRequest()));
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> orderService.createStoreJoinOrder(10L, new JoinStoreRequest()));
 
+        assertEquals(404, exception.getCode());
         verify(policyConfigService, never()).getConfigValue(any());
         verify(orderMapper, never()).insert(any());
     }
@@ -90,6 +93,7 @@ public class OrderServiceImplTest {
                 BusinessException.class,
                 () -> orderService.createStoreJoinOrder(10L, new JoinStoreRequest()));
 
+        assertEquals(400, exception.getCode());
         assertEquals("您已经是店铺，无需重复加盟", exception.getMessage());
         verify(policyConfigService, never()).getConfigValue(any());
         verify(orderMapper, never()).insert(any());
@@ -103,6 +107,7 @@ public class OrderServiceImplTest {
                 BusinessException.class,
                 () -> orderService.createAgentJoinOrder(20L));
 
+        assertEquals(400, exception.getCode());
         assertEquals("您需要先成为店铺才能申请代理", exception.getMessage());
         verify(orderMapper, never()).insert(any());
     }
@@ -111,8 +116,11 @@ public class OrderServiceImplTest {
     void createAgentJoinOrderRejectsMissingUser() {
         when(userMapper.selectById(20L)).thenReturn(null);
 
-        assertThrows(BusinessException.class, () -> orderService.createAgentJoinOrder(20L));
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> orderService.createAgentJoinOrder(20L));
 
+        assertEquals(404, exception.getCode());
         verify(policyConfigService, never()).getConfigValue(any());
         verify(orderMapper, never()).insert(any());
     }
@@ -125,6 +133,7 @@ public class OrderServiceImplTest {
                 BusinessException.class,
                 () -> orderService.createAgentJoinOrder(20L));
 
+        assertEquals(400, exception.getCode());
         assertEquals("您已经是代理，无需重复加盟", exception.getMessage());
         verify(policyConfigService, never()).getConfigValue(any());
         verify(orderMapper, never()).insert(any());
@@ -153,6 +162,7 @@ public class OrderServiceImplTest {
                 BusinessException.class,
                 () -> orderService.createPartnerJoinOrder(30L));
 
+        assertEquals(400, exception.getCode());
         assertEquals("您已经是合伙人，无需重复加盟", exception.getMessage());
         verify(orderMapper, never()).insert(any());
     }
@@ -161,8 +171,11 @@ public class OrderServiceImplTest {
     void createPartnerJoinOrderRejectsMissingUser() {
         when(userMapper.selectById(30L)).thenReturn(null);
 
-        assertThrows(BusinessException.class, () -> orderService.createPartnerJoinOrder(30L));
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> orderService.createPartnerJoinOrder(30L));
 
+        assertEquals(404, exception.getCode());
         verify(policyConfigService, never()).getConfigValue(any());
         verify(orderMapper, never()).insert(any());
     }
@@ -171,10 +184,11 @@ public class OrderServiceImplTest {
     void createPartnerJoinOrderRequiresStoreRole() {
         when(userMapper.selectById(30L)).thenReturn(buildUser(30L, UserRole.MEMBER.getCode()));
 
-        assertThrows(
+        BusinessException exception = assertThrows(
                 BusinessException.class,
                 () -> orderService.createPartnerJoinOrder(30L));
 
+        assertEquals(400, exception.getCode());
         verify(orderMapper, never()).insert(any());
     }
 
@@ -240,6 +254,7 @@ public class OrderServiceImplTest {
                 BusinessException.class,
                 () -> orderService.updateOrderStatus("ORD-PAID-001", OrderStatus.COMPLETED.getCode(), null));
 
+        assertEquals(400, exception.getCode());
         assertEquals("订单状态不可修改", exception.getMessage());
         verify(orderMapper, never()).updateById(any());
     }
@@ -248,10 +263,11 @@ public class OrderServiceImplTest {
     void updateOrderStatusRejectsMissingOrder() {
         when(orderMapper.selectByOrderSn("ORD-MISSING")).thenReturn(null);
 
-        assertThrows(
+        BusinessException exception = assertThrows(
                 BusinessException.class,
                 () -> orderService.updateOrderStatus("ORD-MISSING", OrderStatus.PAID.getCode(), null));
 
+        assertEquals(404, exception.getCode());
         verify(orderMapper, never()).updateById(any());
     }
 

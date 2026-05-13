@@ -35,11 +35,11 @@ public class OrderServiceImpl implements OrderService {
     public Order createStoreJoinOrder(Long userId, JoinStoreRequest request) {
         User user = userMapper.selectById(userId);
         if (user == null) {
-            throw new BusinessException("用户不存在");
+            throw new BusinessException(404, "用户不存在");
         }
 
         if (user.getRole() >= UserRole.STORE.getCode()) {
-            throw new BusinessException("您已经是店铺，无需重复加盟");
+            throw new BusinessException(400, "您已经是店铺，无需重复加盟");
         }
 
         BigDecimal joinFee = policyConfigService.getConfigValue("STORE_JOIN_FEE");
@@ -65,15 +65,15 @@ public class OrderServiceImpl implements OrderService {
     public Order createAgentJoinOrder(Long userId) {
         User user = userMapper.selectById(userId);
         if (user == null) {
-            throw new BusinessException("用户不存在");
+            throw new BusinessException(404, "用户不存在");
         }
 
         if (user.getRole() >= UserRole.AGENT.getCode()) {
-            throw new BusinessException("您已经是代理，无需重复加盟");
+            throw new BusinessException(400, "您已经是代理，无需重复加盟");
         }
 
         if (user.getRole() < UserRole.STORE.getCode()) {
-            throw new BusinessException("您需要先成为店铺才能申请代理");
+            throw new BusinessException(400, "您需要先成为店铺才能申请代理");
         }
 
         BigDecimal joinFee = policyConfigService.getConfigValue("AGENT_JOIN_FEE");
@@ -99,15 +99,15 @@ public class OrderServiceImpl implements OrderService {
     public Order createPartnerJoinOrder(Long userId) {
         User user = userMapper.selectById(userId);
         if (user == null) {
-            throw new BusinessException("用户不存在");
+            throw new BusinessException(404, "用户不存在");
         }
 
         if (user.getRole() >= UserRole.PARTNER.getCode()) {
-            throw new BusinessException("您已经是合伙人，无需重复加盟");
+            throw new BusinessException(400, "您已经是合伙人，无需重复加盟");
         }
 
         if (user.getRole() < UserRole.STORE.getCode()) {
-            throw new BusinessException("您需要先成为店铺才能申请合伙人");
+            throw new BusinessException(400, "您需要先成为店铺才能申请合伙人");
         }
 
         BigDecimal joinFee = policyConfigService.getConfigValue("PARTNER_JOIN_FEE");
@@ -143,11 +143,11 @@ public class OrderServiceImpl implements OrderService {
     public void updateOrderStatus(String orderSn, Integer status, String transactionId) {
         Order order = orderMapper.selectByOrderSn(orderSn);
         if (order == null) {
-            throw new BusinessException("订单不存在");
+            throw new BusinessException(404, "订单不存在");
         }
 
         if (order.getStatus() != OrderStatus.PENDING.getCode()) {
-            throw new BusinessException("订单状态不可修改");
+            throw new BusinessException(400, "订单状态不可修改");
         }
 
         order.setStatus(status);
