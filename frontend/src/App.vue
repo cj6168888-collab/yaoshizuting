@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import axios from 'axios';
+import QRCode from 'qrcode';
 import { baseURL } from './utils/config';
 import logoUrl from './static/logo.jpg';
 
@@ -38,6 +39,7 @@ const withdrawalForm = ref({
   bankName: ''
 });
 const inviteQrData = ref(null);
+const inviteQrImage = ref('');
 const parentId = ref('');
 const bindingMobile = ref('');
 const bindingLoading = ref(false);
@@ -556,6 +558,16 @@ async function loadInviteQr() {
   try {
     const data = unwrap(await api.get('/user/invite-qr', { headers: authHeaders() }));
     inviteQrData.value = data;
+    inviteQrImage.value = data?.inviteUrl
+      ? await QRCode.toDataURL(data.inviteUrl, {
+          width: 220,
+          margin: 1,
+          color: {
+            dark: '#103d1e',
+            light: '#ffffff'
+          }
+        })
+      : '';
     if (!parentId.value && data?.parentId) {
       parentId.value = String(data.parentId);
     }
@@ -891,6 +903,7 @@ function logout() {
   publicProducts.value = [];
   policies.value = {};
   inviteQrData.value = null;
+  inviteQrImage.value = '';
   joinMessage.value = '';
   withdrawalMessage.value = '';
   localStorage.clear();
@@ -1281,7 +1294,10 @@ onUnmounted(clearCodeTimer);
                   <span>邀请人: <b>{{ inviteQrData.parentNickname }}</b></span>
                   <span>ID: <b>{{ inviteQrData.parentId }}</b></span>
                 </div>
-                <div class="mini-qr-box">QR</div>
+                <div class="mini-qr-box">
+                  <img v-if="inviteQrImage" :src="inviteQrImage" alt="邀请二维码" />
+                  <span v-else>QR</span>
+                </div>
                 <p class="qr-hint">带海报转发，新会员点击或扫码进入后直接注册并绑定关系</p>
                 <code class="qr-link">{{ inviteQrData.inviteUrl }}</code>
                 <div class="poster-actions">
@@ -1745,7 +1761,8 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--p
 .qr-meta b { color: var(--pri); }
 .share-card .qr-meta { color: rgba(255,255,255,.78); }
 .share-card .qr-meta b { color: #fff; }
-.mini-qr-box { width: 156px; height: 156px; margin: 18px auto; display: grid; place-items: center; border: 10px solid #fff; border-radius: 8px; background: repeating-linear-gradient(45deg, #172615 0 8px, #fff 8px 16px); color: transparent; }
+.mini-qr-box { width: 176px; height: 176px; margin: 18px auto; display: grid; place-items: center; border: 10px solid #fff; border-radius: 8px; background: #fff; color: transparent; box-shadow: 0 10px 24px rgba(0,0,0,.14); }
+.mini-qr-box img { width: 100%; height: 100%; display: block; object-fit: contain; }
 .qr-hint { margin-top: 16px; font-size: 12px; color: var(--text3); }
 .share-card .qr-hint { color: rgba(255,255,255,.78); }
 .qr-link { display: block; margin-top: 12px; padding: 10px 14px; background: #fff; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; color: var(--text3); word-break: break-all; }

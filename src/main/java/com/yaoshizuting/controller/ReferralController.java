@@ -49,7 +49,7 @@ public class ReferralController {
         qrData.put("parentId", user.getId());
         qrData.put("parentMobile", user.getMobile());
         qrData.put("parentNickname", user.getNickname());
-        qrData.put("inviteUrl", generateInviteUrl(user.getId().toString(), user.getMobile()));
+        qrData.put("inviteUrl", generateInviteUrl(request, user.getId().toString(), user.getMobile(), user.getNickname()));
 
         return ApiResponse.success(qrData);
     }
@@ -217,7 +217,15 @@ public class ReferralController {
         }
     }
 
-    private String generateInviteUrl(String userId, String mobile) {
-        return "https://yaoshizuting.com/register?parentId=" + userId + "&mobile=" + mobile;
+    private String generateInviteUrl(HttpServletRequest request, String userId, String mobile, String nickname) {
+        String forwardedProto = request.getHeader("X-Forwarded-Proto");
+        String scheme = forwardedProto != null && !forwardedProto.isBlank() ? forwardedProto : request.getScheme();
+        String forwardedHost = request.getHeader("X-Forwarded-Host");
+        String host = forwardedHost != null && !forwardedHost.isBlank() ? forwardedHost : request.getHeader("Host");
+        if (host == null || host.isBlank()) {
+            host = request.getServerName();
+        }
+        String encodedName = java.net.URLEncoder.encode(nickname == null ? "" : nickname, java.nio.charset.StandardCharsets.UTF_8);
+        return scheme + "://" + host + "/?parentId=" + userId + "&mobile=" + mobile + "&inviterName=" + encodedName;
     }
 }

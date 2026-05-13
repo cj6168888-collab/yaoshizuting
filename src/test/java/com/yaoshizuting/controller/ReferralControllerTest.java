@@ -71,6 +71,8 @@ class ReferralControllerTest {
     @Test
     void getInviteQrDataReturnsInvitePayloadForBearerToken() {
         when(request.getHeader("Authorization")).thenReturn("Bearer token");
+        when(request.getHeader("X-Forwarded-Proto")).thenReturn("https");
+        when(request.getHeader("X-Forwarded-Host")).thenReturn("h5.yaoshizuting.com");
         when(jwtUtils.getUserIdFromToken("token")).thenReturn(12L);
         when(userMapper.selectById(12L)).thenReturn(user(12L, "13800138000", "邀请人"));
 
@@ -81,7 +83,7 @@ class ReferralControllerTest {
         assertEquals("13800138000", response.getData().get("parentMobile"));
         assertEquals("邀请人", response.getData().get("parentNickname"));
         assertEquals(
-                "https://yaoshizuting.com/register?parentId=12&mobile=13800138000",
+                "https://h5.yaoshizuting.com/?parentId=12&mobile=13800138000&inviterName=%E9%82%80%E8%AF%B7%E4%BA%BA",
                 response.getData().get("inviteUrl"));
     }
 
