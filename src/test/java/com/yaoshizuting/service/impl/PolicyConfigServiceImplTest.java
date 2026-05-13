@@ -18,6 +18,7 @@ import java.util.concurrent.TimeUnit;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -76,6 +77,7 @@ public class PolicyConfigServiceImplTest {
                 () -> policyConfigService.getConfigValue("missing_rate"));
 
         assertEquals("配置键不存在: missing_rate", exception.getMessage());
+        assertEquals(404, exception.getCode());
         verify(valueOperations, never()).set(any(), any(), eq(1L), eq(TimeUnit.HOURS));
     }
 
@@ -88,8 +90,25 @@ public class PolicyConfigServiceImplTest {
         when(valueOperations.get("policy:disabled_rate")).thenReturn(null);
         when(policyConfigMapper.selectByKey("disabled_rate")).thenReturn(config);
 
-        assertThrows(BusinessException.class, () -> policyConfigService.getConfigValue("disabled_rate"));
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> policyConfigService.getConfigValue("disabled_rate"));
+
+        assertEquals(404, exception.getCode());
+        assertEquals("配置键不存在: disabled_rate", exception.getMessage());
         verify(valueOperations, never()).set(any(), any(), eq(1L), eq(TimeUnit.HOURS));
+    }
+
+    @Test
+    void updateConfigRejectsNegativeValueWithBusinessCode() {
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> policyConfigService.updateConfig("negative_rate", new BigDecimal("-0.01"), null));
+
+        assertEquals(400, exception.getCode());
+        assertEquals("配置值不能小于0", exception.getMessage());
+        verify(policyConfigMapper, never()).selectByKey(any());
+        verify(redisTemplate, never()).delete(anyString());
     }
 
     @Test

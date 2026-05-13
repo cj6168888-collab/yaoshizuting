@@ -66,7 +66,7 @@ public class PolicyConfigServiceImpl implements PolicyConfigService {
                 redisTemplate.opsForValue().set(cacheKey, defaultValue.toString(), 1, TimeUnit.HOURS);
                 return defaultValue;
             }
-            throw new BusinessException("配置键不存在: " + key);
+            throw new BusinessException(404, "配置键不存在: " + key);
         }
 
         redisTemplate.opsForValue().set(cacheKey, config.getConfigValue().toString(), 1, TimeUnit.HOURS);
@@ -77,7 +77,7 @@ public class PolicyConfigServiceImpl implements PolicyConfigService {
     @Transactional(rollbackFor = Exception.class)
     public void updateConfig(String key, BigDecimal value, String description) {
         if (value == null || value.compareTo(BigDecimal.ZERO) < 0) {
-            throw new BusinessException("配置值不能小于0");
+            throw new BusinessException(400, "配置值不能小于0");
         }
 
         PolicyConfig config = policyConfigMapper.selectByKey(key);

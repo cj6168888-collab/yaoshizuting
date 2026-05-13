@@ -6,6 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.validation.BindException;
 import org.springframework.validation.FieldError;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -42,6 +43,13 @@ public class GlobalExceptionHandler {
                 .collect(Collectors.joining(", "));
         log.error("参数绑定异常: {}", message);
         return ApiResponse.error(400, message);
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiResponse<Void> handleHttpMessageNotReadableException(HttpMessageNotReadableException e) {
+        log.error("请求体解析异常: {}", e.getMessage());
+        return ApiResponse.error(400, "请求体格式无效");
     }
 
     @ExceptionHandler(RateLimitExceededException.class)

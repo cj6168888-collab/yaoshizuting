@@ -123,6 +123,42 @@ class AdminPolicyControllerTest {
     }
 
     @Test
+    void updatePolicy_WithMalformedJson_ReturnsBusinessError() throws Exception {
+        mockMvc.perform(put("/api/admin/policy")
+                .contextPath("/api")
+                .header("Authorization", adminToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"configKey\":"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(400))
+                .andExpect(jsonPath("$.message").value("请求体格式无效"));
+    }
+
+    @Test
+    void updatePolicy_WithNegativeConfigValue_ReturnsBusinessError() throws Exception {
+        mockMvc.perform(put("/api/admin/policy")
+                .contextPath("/api")
+                .header("Authorization", adminToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                        "configKey", nextPolicyKey(),
+                        "configValue", new BigDecimal("-1.00")))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(400))
+                .andExpect(jsonPath("$.message").value("配置值不能小于0"));
+    }
+
+    @Test
+    void getPolicy_WithMissingConfig_ReturnsBusinessError() throws Exception {
+        mockMvc.perform(get("/api/admin/policy/{key}", nextPolicyKey())
+                .contextPath("/api")
+                .header("Authorization", adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(404))
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.startsWith("配置键不存在: ")));
+    }
+
+    @Test
     void updatePolicy_WithUserToken_ReturnsForbidden() throws Exception {
         mockMvc.perform(put("/api/admin/policy")
                 .contextPath("/api")
