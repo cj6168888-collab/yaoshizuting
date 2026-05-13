@@ -49,3 +49,19 @@ Implementation notes:
 - Keep mobile cards compact, with clear hierarchy for balance, team, product, and invite states.
 - Preserve 8px radius and restrained semantic chip colors on mobile.
 - Increase tap targets while reducing ornamental spacing.
+
+## imagegen-login-board.png
+
+Generated with the built-in image generation tool as a focused reference for the login and session-entry experience.
+
+Prompt summary:
+- Mobile and desktop login screens for 药师祖庭会员管理系统.
+- Phone/SMS login, code input row, quick test account chips, loading button, session error state, and brand header.
+- Deep medicinal green, herbal green, warm gold, white login card, pale sage surface, and professional wellness operations tone.
+- Avoid purple/blue gradients, decorative orbs, cartoon style, oversized hero composition, and fake browser chrome.
+
+Implementation notes:
+- Prefer a light herbal background with a crisp white login card over a heavy full-green page.
+- Keep the SMS code action attached to the code input and sized as a clear touch target.
+- Make quick test accounts read as role chips rather than plain text buttons.
+- Keep mobile login spacing compact enough that the whole flow remains visible without awkward scrolling.

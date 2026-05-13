@@ -324,7 +324,7 @@ docker exec yaoshizuting-redis redis-cli get sms:code:13800000000
 
 ## 📝 开发计划
 
-- [ ] 移动端适配优化
+- [x] 移动端适配优化
 - [ ] 数据导出功能
 - [ ] 消息通知系统
 - [ ] 数据可视化大屏
