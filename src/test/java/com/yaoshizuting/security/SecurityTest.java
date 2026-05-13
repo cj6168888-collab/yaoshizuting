@@ -112,6 +112,24 @@ class SecurityTest {
     }
 
     @Test
+    void testPublicEndpoint_LockParentAccessibleWithoutToken() throws Exception {
+        mockMvc.perform(post("/api/user/lock-parent")
+                .contextPath("/api")
+                .contentType("application/json")
+                .content("{\"mobile\":\"invalid\",\"parentId\":1}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(400))
+                .andExpect(jsonPath("$.message").value("手机号格式不正确"));
+    }
+
+    @Test
+    void testPublicEndpoint_GetLockedParentAccessibleWithoutToken() throws Exception {
+        mockMvc.perform(get("/api/user/get-locked-parent/13800138000").contextPath("/api"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(200));
+    }
+
+    @Test
     void testHealthEndpoint_WithoutToken_ReturnsOk() throws Exception {
         mockMvc.perform(get("/api/health").contextPath("/api"))
                 .andExpect(status().isOk())

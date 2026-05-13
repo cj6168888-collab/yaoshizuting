@@ -16,6 +16,7 @@ const user = ref(JSON.parse(localStorage.getItem('user') || '{}'));
 const loading = ref(false);
 const countdown = ref(0);
 const loginError = ref('');
+const inviteLockMessage = ref('');
 let codeTimer = null;
 
 const inviteContext = ref(parseInviteContext());
@@ -211,10 +212,13 @@ function parseInviteContext() {
   const params = new URLSearchParams(window.location.search);
   const hashParams = new URLSearchParams(window.location.hash.split('?')[1] || '');
   const read = (key) => params.get(key) || hashParams.get(key) || '';
+  const sceneText = read('scene');
+  const sceneParams = new URLSearchParams(decodeURIComponent(sceneText || '').replace(/^scene=/, ''));
+  const sceneParentId = sceneParams.get('parentId') || (/^\d+$/.test(sceneText) ? sceneText : '');
   return {
-    parentId: read('parentId') || read('scene'),
-    mobile: read('mobile') || read('inviteCode'),
-    inviterName: read('inviterName') || read('nickname')
+    parentId: read('parentId') || sceneParentId,
+    mobile: read('mobile') || read('inviteCode') || sceneParams.get('mobile') || '',
+    inviterName: read('inviterName') || read('nickname') || sceneParams.get('inviterName') || ''
   };
 }
 
@@ -229,6 +233,25 @@ function goHome() {
 function goLogin() {
   currentView.value = 'login';
   loginError.value = '';
+}
+
+async function lockInviteForMobile(targetMobile) {
+  inviteLockMessage.value = '';
+  const inviterParentId = Number(inviteContext.value.parentId || 0);
+  if (!inviterParentId || !targetMobile || !/^1[3-9]\d{9}$/.test(targetMobile)) return;
+
+  try {
+    const response = unwrap(await api.post('/user/lock-parent', {
+      mobile: targetMobile,
+      parentId: inviterParentId
+    }));
+    inviteLockMessage.value = response?.parentNickname
+      ? `已锁定推荐人：${response.parentNickname}`
+      : '已锁定推荐关系';
+  } catch (error) {
+    loginError.value = errorMessage(error, '推荐关系锁定失败');
+    throw error;
+  }
 }
 
 function formatMoney(amount) {
@@ -305,6 +328,7 @@ async function sendCode() {
   }
 
   try {
+    await lockInviteForMobile(mobile.value);
     await api.post(`/auth/sendCode/${mobile.value}`);
     clearCodeTimer();
     countdown.value = 60;
@@ -333,6 +357,7 @@ async function login() {
 
   loading.value = true;
   try {
+    await lockInviteForMobile(mobile.value);
     const payload = { mobile: mobile.value, code: code.value };
     if (inviteContext.value.mobile) {
       payload.inviteCode = inviteContext.value.mobile;
@@ -874,6 +899,7 @@ function logout() {
   code.value = '';
   countdown.value = 0;
   loginError.value = '';
+  inviteLockMessage.value = '';
   bindResult.value = null;
 }
 
@@ -993,6 +1019,7 @@ onUnmounted(clearCodeTimer);
           <div v-if="inviteContext.parentId || inviteContext.mobile" class="invite-hint">
             <b>推荐注册</b>
             <span>推荐人：{{ inviterName }}<template v-if="inviteContext.parentId"> · ID {{ inviteContext.parentId }}</template></span>
+            <em v-if="inviteLockMessage">{{ inviteLockMessage }}</em>
           </div>
           <div class="input-group">
             <label>手机号</label>
@@ -1613,6 +1640,7 @@ button { cursor: pointer; }
 .invite-hint { margin-bottom: 18px; padding: 12px; border: 1px solid #e2ead9; border-radius: 8px; background: #fbfcf8; }
 .invite-hint b { display: block; color: var(--pri-dark); font-size: 14px; }
 .invite-hint span { color: var(--text3); font-size: 12px; }
+.invite-hint em { display: block; margin-top: 5px; color: var(--success); font-size: 12px; font-style: normal; font-weight: 700; }
 .input-group { margin-bottom: 18px; }
 .input-group label { display: block; font-size: 13px; font-weight: 600; color: var(--text2); margin-bottom: 6px; }
 .input-box input { width: 100%; height: 48px; padding: 0 14px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 16px; background: #fbfcf8; transition: all .25s; }

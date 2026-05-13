@@ -47,6 +47,8 @@ public class SecurityConfig {
                 .requestMatchers("/actuator/health/**", "/api/actuator/health/**").permitAll()
                 .requestMatchers("/actuator/prometheus", "/api/actuator/prometheus").permitAll()
                 .requestMatchers("/auth/**", "/api/auth/**").permitAll()
+                .requestMatchers("/user/lock-parent", "/api/user/lock-parent").permitAll()
+                .requestMatchers("/user/get-locked-parent/**", "/api/user/get-locked-parent/**").permitAll()
                 .requestMatchers("/uploads/**", "/api/uploads/**").permitAll()
                 .requestMatchers("/admin/**", "/api/admin/**").hasRole("ADMIN")
                 .requestMatchers("/v1/pay/**", "/api/v1/pay/**").permitAll()
