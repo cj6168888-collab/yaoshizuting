@@ -8,6 +8,7 @@ import com.yaoshizuting.dto.ApiResponse;
 import com.yaoshizuting.entity.ProfitLog;
 import com.yaoshizuting.entity.User;
 import com.yaoshizuting.entity.Withdrawal;
+import com.yaoshizuting.exception.BusinessException;
 import com.yaoshizuting.mapper.ProfitLogMapper;
 import com.yaoshizuting.mapper.UserMapper;
 import com.yaoshizuting.mapper.WithdrawalMapper;
@@ -62,6 +63,7 @@ public class AdminFinanceController {
             @RequestParam(required = false) Integer status,
             @RequestParam(required = false) Long userId) {
 
+        validateWithdrawalStatus(status);
         LambdaQueryWrapper<Withdrawal> wrapper = buildWithdrawalWrapper(status, userId);
 
         Page<Withdrawal> result = withdrawalMapper.selectPage(new Page<>(page, Math.min(size, 100)), wrapper);
@@ -98,6 +100,7 @@ public class AdminFinanceController {
             @RequestParam(required = false) Integer status,
             @RequestParam(required = false) Long userId) {
 
+        validateWithdrawalStatus(status);
         List<AdminWithdrawalView> records = enrichWithdrawals(
                 withdrawalMapper.selectList(buildWithdrawalWrapper(status, userId).last("LIMIT 5000")));
         byte[] csv = CsvExportUtils.toCsv(
@@ -166,6 +169,12 @@ public class AdminFinanceController {
                 .eq(receiverId != null, ProfitLog::getReceiverId, receiverId)
                 .eq(type != null && !type.isBlank(), ProfitLog::getType, type)
                 .orderByDesc(ProfitLog::getCreateTime);
+    }
+
+    private void validateWithdrawalStatus(Integer status) {
+        if (status != null && (status < 0 || status > 3)) {
+            throw new BusinessException(400, "提现状态无效");
+        }
     }
 
     private List<AdminWithdrawalView> enrichWithdrawals(List<Withdrawal> withdrawals) {

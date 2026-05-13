@@ -135,6 +135,17 @@ class AdminFinanceControllerTest {
     }
 
     @Test
+    void withdrawals_WithInvalidStatus_ReturnsBusinessError() throws Exception {
+        mockMvc.perform(get("/api/admin/finance/withdrawals")
+                .contextPath("/api")
+                .param("status", "99")
+                .header("Authorization", adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(400))
+                .andExpect(jsonPath("$.message").value("提现状态无效"));
+    }
+
+    @Test
     void profitLogs_WithAdminToken_ReturnsEnrichedProfitLogs() throws Exception {
         mockMvc.perform(get("/api/admin/finance/profit-logs")
                 .contextPath("/api")
@@ -165,6 +176,17 @@ class AdminFinanceControllerTest {
                         result.getResponse().getContentAsString().contains(withdrawalSn)))
                 .andExpect(result -> org.junit.jupiter.api.Assertions.assertTrue(
                         result.getResponse().getContentAsString().contains(testUserMobile)));
+    }
+
+    @Test
+    void exportWithdrawals_WithInvalidStatus_ReturnsBusinessError() throws Exception {
+        mockMvc.perform(get("/api/admin/finance/withdrawals/export")
+                .contextPath("/api")
+                .param("status", "99")
+                .header("Authorization", adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(400))
+                .andExpect(jsonPath("$.message").value("提现状态无效"));
     }
 
     @Test
