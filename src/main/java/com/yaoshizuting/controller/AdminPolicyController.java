@@ -47,7 +47,7 @@ public class AdminPolicyController {
     private BigDecimal requiredBigDecimal(Map<String, Object> params, String key, String label) {
         Object value = requiredValue(params, key, label);
         try {
-            return new BigDecimal(value.toString());
+            return new BigDecimal(value.toString().trim());
         } catch (NumberFormatException ex) {
             throw new BusinessException(400, label + "格式无效");
         }

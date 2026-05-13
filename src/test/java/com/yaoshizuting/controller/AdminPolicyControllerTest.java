@@ -97,6 +97,29 @@ class AdminPolicyControllerTest {
     }
 
     @Test
+    void updatePolicy_WithWhitespaceWrappedConfigValue_CreatesConfig() throws Exception {
+        String key = nextPolicyKey();
+
+        mockMvc.perform(put("/api/admin/policy")
+                .contextPath("/api")
+                .header("Authorization", adminToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                        "configKey", key,
+                        "configValue", " 299.00 ",
+                        "description", "后台政策测试配置"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.data.message").value("配置更新成功"));
+
+        mockMvc.perform(get("/api/admin/policy/{key}", key)
+                .contextPath("/api")
+                .header("Authorization", adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.configValue").value(299.00));
+    }
+
+    @Test
     void updatePolicy_WithoutConfigKey_ReturnsBusinessError() throws Exception {
         mockMvc.perform(put("/api/admin/policy")
                 .contextPath("/api")
