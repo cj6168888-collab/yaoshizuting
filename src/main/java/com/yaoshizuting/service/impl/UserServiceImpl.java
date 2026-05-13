@@ -49,12 +49,12 @@ public class UserServiceImpl implements UserService {
         String cachedCode = cachedCodeObj != null ? cachedCodeObj.toString().trim() : null;
         
         if (cachedCode == null) {
-            throw new BusinessException("验证码已过期，请重新获取");
+            throw new BusinessException(400, "验证码已过期，请重新获取");
         }
         
         log.info("验证码比对: cached={}, input={}", cachedCode, code);
         if (!cachedCode.equals(code.trim())) {
-            throw new BusinessException("验证码错误");
+            throw new BusinessException(400, "验证码错误");
         }
 
         User user = userMapper.selectByMobile(mobile);
@@ -99,7 +99,7 @@ public class UserServiceImpl implements UserService {
         }
 
         if (user.getStatus() == 0) {
-            throw new BusinessException("账号已被冻结，请联系管理员");
+            throw new BusinessException(403, "账号已被冻结，请联系管理员");
         }
 
         redisTemplate.delete(cacheKey);

@@ -64,6 +64,7 @@ class UserServiceImplTest {
                 BusinessException.class,
                 () -> userService.login(request));
 
+        assertEquals(400, exception.getCode());
         assertEquals("验证码已过期，请重新获取", exception.getMessage());
         verify(userMapper, never()).selectByMobile(any());
     }
@@ -77,6 +78,7 @@ class UserServiceImplTest {
                 BusinessException.class,
                 () -> userService.login(request));
 
+        assertEquals(400, exception.getCode());
         assertEquals("验证码错误", exception.getMessage());
         verify(userMapper, never()).selectByMobile(any());
     }
@@ -143,6 +145,7 @@ class UserServiceImplTest {
                 BusinessException.class,
                 () -> userService.login(request));
 
+        assertEquals(403, exception.getCode());
         assertEquals("账号已被冻结，请联系管理员", exception.getMessage());
         verify(redisTemplate).delete("invite:bind:13800138000");
         verify(redisTemplate, never()).delete("sms:code:13800138000");

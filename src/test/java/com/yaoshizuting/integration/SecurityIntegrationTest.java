@@ -55,7 +55,7 @@ class SecurityIntegrationTest {
                 .contentType("application/json")
                 .content("{\"mobile\":\"13800138000\",\"code\":\"wrong\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(500));
+                .andExpect(jsonPath("$.code").value(400));
 
         mockMvc.perform(post("/api/auth/sendCode/13800138000")
                 .contextPath("/api")
