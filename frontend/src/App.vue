@@ -40,6 +40,7 @@ const withdrawalForm = ref({
 });
 const inviteQrData = ref(null);
 const inviteQrImage = ref('');
+const publicPosterQrImage = ref('');
 const parentId = ref('');
 const bindingMobile = ref('');
 const bindingLoading = ref(false);
@@ -222,6 +223,30 @@ function parseInviteContext() {
     mobile: read('mobile') || read('inviteCode') || sceneParams.get('mobile') || '',
     inviterName: read('inviterName') || read('nickname') || sceneParams.get('inviterName') || ''
   };
+}
+
+function buildPublicInviteUrl() {
+  const url = new URL(window.location.origin + window.location.pathname);
+  const context = inviteContext.value;
+  if (context.parentId) url.searchParams.set('parentId', context.parentId);
+  if (context.mobile) url.searchParams.set('mobile', context.mobile);
+  if (context.inviterName) url.searchParams.set('inviterName', context.inviterName);
+  return url.toString();
+}
+
+async function generatePublicPosterQr() {
+  try {
+    publicPosterQrImage.value = await QRCode.toDataURL(buildPublicInviteUrl(), {
+      width: 220,
+      margin: 1,
+      color: {
+        dark: '#103d1e',
+        light: '#ffffff'
+      }
+    });
+  } catch (error) {
+    publicPosterQrImage.value = '';
+  }
 }
 
 function goHome() {
@@ -942,6 +967,7 @@ api.interceptors.response.use(
 );
 
 onMounted(() => {
+  generatePublicPosterQr();
   if (token.value) {
     currentView.value = 'dashboard';
     fetchData();
@@ -997,7 +1023,10 @@ onUnmounted(clearCodeTimer);
       <section id="poster" class="share-poster">
         <div class="poster-art">
           <div class="poster-title">扫码加入 药师祖庭</div>
-          <div class="poster-qr">QR</div>
+          <div class="poster-qr">
+            <img v-if="publicPosterQrImage" :src="publicPosterQrImage" alt="药师祖庭注册二维码" />
+            <span v-else>QR</span>
+          </div>
           <div class="poster-ref">
             <img :src="logoUrl" alt="" />
             <div><span>推荐人</span><b>{{ inviterName }}</b></div>
@@ -1634,7 +1663,8 @@ button { cursor: pointer; }
 .share-poster { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 24px; padding: 24px; align-items: center; }
 .poster-art { padding: 20px; border-radius: 8px; background: linear-gradient(180deg, #0d4b27 0%, #177038 100%); color: #fff; text-align: center; }
 .poster-title { margin-bottom: 16px; color: #f3d47b; font-size: 22px; font-weight: 900; }
-.poster-qr { width: 168px; height: 168px; margin: 0 auto 16px; display: grid; place-items: center; border: 10px solid #fff; border-radius: 8px; background: repeating-linear-gradient(45deg, #172615 0 8px, #fff 8px 16px); color: transparent; }
+.poster-qr { width: 168px; height: 168px; margin: 0 auto 16px; display: grid; place-items: center; border: 10px solid #fff; border-radius: 8px; background: #fff; color: transparent; box-shadow: 0 10px 24px rgba(0,0,0,.14); }
+.poster-qr img { width: 100%; height: 100%; display: block; object-fit: contain; }
 .poster-ref { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 8px; background: rgba(255,255,255,.12); text-align: left; }
 .poster-ref img { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; }
 .poster-ref span { display: block; color: rgba(255,255,255,.72); font-size: 12px; }
