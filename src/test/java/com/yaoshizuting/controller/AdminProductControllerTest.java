@@ -85,6 +85,16 @@ class AdminProductControllerTest {
     }
 
     @Test
+    void uploadImage_WithoutFile_ReturnsBusinessError() throws Exception {
+        mockMvc.perform(multipart("/api/admin/product/upload")
+                .contextPath("/api")
+                .header("Authorization", adminToken))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(400))
+                .andExpect(jsonPath("$.message").value("file不能为空"));
+    }
+
+    @Test
     void createProduct_WithAdminToken_ReturnsCreatedProduct() throws Exception {
         ProductUpsertRequest request = buildRequest(nextProductCode());
 

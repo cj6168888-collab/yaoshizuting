@@ -8,7 +8,9 @@ import org.springframework.validation.BindException;
 import org.springframework.validation.FieldError;
 import org.springframework.validation.MapBindingResult;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 
 import java.lang.reflect.Method;
 import java.util.HashMap;
@@ -78,6 +80,27 @@ class GlobalExceptionHandlerTest {
 
         assertEquals(400, response.getCode());
         assertEquals("parentId格式无效", response.getMessage());
+    }
+
+    @Test
+    void handleMissingServletRequestParameterExceptionReturnsBadRequestCode() {
+        MissingServletRequestParameterException exception =
+                new MissingServletRequestParameterException("status", "Integer");
+
+        ApiResponse<Void> response = handler.handleMissingServletRequestParameterException(exception);
+
+        assertEquals(400, response.getCode());
+        assertEquals("status不能为空", response.getMessage());
+    }
+
+    @Test
+    void handleMissingServletRequestPartExceptionReturnsBadRequestCode() {
+        MissingServletRequestPartException exception = new MissingServletRequestPartException("file");
+
+        ApiResponse<Void> response = handler.handleMissingServletRequestPartException(exception);
+
+        assertEquals(400, response.getCode());
+        assertEquals("file不能为空", response.getMessage());
     }
 
     @Test

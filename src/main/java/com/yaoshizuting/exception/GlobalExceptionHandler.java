@@ -8,10 +8,12 @@ import org.springframework.validation.BindException;
 import org.springframework.validation.FieldError;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 
 import java.util.stream.Collectors;
 
@@ -58,6 +60,21 @@ public class GlobalExceptionHandler {
     public ApiResponse<Void> handleMethodArgumentTypeMismatchException(MethodArgumentTypeMismatchException e) {
         log.error("参数类型异常: {}={}", e.getName(), e.getValue());
         return ApiResponse.error(400, e.getName() + "格式无效");
+    }
+
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiResponse<Void> handleMissingServletRequestParameterException(
+            MissingServletRequestParameterException e) {
+        log.error("缺少请求参数: {}", e.getParameterName());
+        return ApiResponse.error(400, e.getParameterName() + "不能为空");
+    }
+
+    @ExceptionHandler(MissingServletRequestPartException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiResponse<Void> handleMissingServletRequestPartException(MissingServletRequestPartException e) {
+        log.error("缺少请求部件: {}", e.getRequestPartName());
+        return ApiResponse.error(400, e.getRequestPartName() + "不能为空");
     }
 
     @ExceptionHandler(RateLimitExceededException.class)
