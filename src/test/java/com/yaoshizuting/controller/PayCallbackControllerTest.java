@@ -1,11 +1,13 @@
 package com.yaoshizuting.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yaoshizuting.dto.ApiResponse;
 import com.yaoshizuting.entity.Order;
 import com.yaoshizuting.enums.OrderStatus;
 import com.yaoshizuting.service.OrderService;
 import com.yaoshizuting.service.PaymentSignatureService;
 import com.yaoshizuting.service.ProfitService;
+import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -15,8 +17,14 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -37,11 +45,12 @@ class PayCallbackControllerTest {
     @Mock
     private PaymentSignatureService signatureService;
 
+    private PayCallbackController controller;
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
-        PayCallbackController controller = new PayCallbackController(
+        controller = new PayCallbackController(
                 orderService,
                 profitService,
                 signatureService,
@@ -253,6 +262,49 @@ class PayCallbackControllerTest {
     }
 
     @Test
+    void wechatNotify_WithBlankPayload_DoesNotLookupOrder() throws Exception {
+        String body = "   ";
+
+        when(signatureService.isAllowedIP("127.0.0.1")).thenReturn(true);
+        when(signatureService.verifyWechatSignature("sig", body, "ts", "nonce")).thenReturn(true);
+
+        mockMvc.perform(post("/v1/pay/wechat/notify")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body)
+                .header("Wechatpay-Signature", "sig")
+                .header("Wechatpay-Timestamp", "ts")
+                .header("Wechatpay-Nonce", "nonce")
+                .with(request -> {
+                    request.setRemoteAddr("127.0.0.1");
+                    return request;
+                }))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(200));
+
+        verifyNoInteractions(orderService, profitService);
+    }
+
+    @Test
+    void wechatNotify_WhenBodyReadFails_ReturnsSignatureError() throws Exception {
+        HttpServletRequest request = mock(HttpServletRequest.class);
+        when(request.getHeader("X-Forwarded-For")).thenReturn(null);
+        when(request.getHeader("X-Real-IP")).thenReturn(null);
+        when(request.getRemoteAddr()).thenReturn("127.0.0.1");
+        when(request.getHeader("Wechatpay-Signature")).thenReturn("sig");
+        when(request.getHeader("Wechatpay-Timestamp")).thenReturn("ts");
+        when(request.getHeader("Wechatpay-Nonce")).thenReturn("nonce");
+        when(request.getReader()).thenThrow(new IOException("reader failed"));
+        when(signatureService.isAllowedIP("127.0.0.1")).thenReturn(true);
+        when(signatureService.verifyWechatSignature("sig", "", "ts", "nonce")).thenReturn(false);
+
+        ApiResponse<Void> response = controller.wechatNotify(request);
+
+        assertEquals(500, response.getCode());
+        assertEquals("Signature verification failed", response.getMessage());
+        verifyNoInteractions(orderService, profitService);
+    }
+
+    @Test
     void wechatNotify_WithMissingOrder_ReturnsOrderNotFound() throws Exception {
         String body = """
                 {"out_trade_no":"ORD-MISSING","transaction_id":"WX-TX-MISSING","result_code":"SUCCESS"}
@@ -278,6 +330,28 @@ class PayCallbackControllerTest {
 
         verify(orderService, never()).updateOrderStatus("ORD-MISSING", OrderStatus.PAID.getCode(), "WX-TX-MISSING");
         verifyNoInteractions(profitService);
+    }
+
+    @Test
+    void alipayNotify_WithBlankProxyHeadersAndSparseParams_UsesRemoteIp() {
+        HttpServletRequest request = mock(HttpServletRequest.class);
+        Map<String, String[]> params = new HashMap<>();
+        params.put("ignoredNull", null);
+        params.put("ignoredEmpty", new String[]{});
+        params.put("out_trade_no", new String[]{"ORD-ALI-SPARSE"});
+
+        when(request.getHeader("X-Forwarded-For")).thenReturn(" ");
+        when(request.getHeader("X-Real-IP")).thenReturn(" ");
+        when(request.getRemoteAddr()).thenReturn("127.0.0.1");
+        when(request.getParameterMap()).thenReturn(params);
+        when(signatureService.isAllowedIP("127.0.0.1")).thenReturn(true);
+        when(signatureService.verifyAlipaySignature(anyMap())).thenReturn(false);
+
+        ApiResponse<Void> response = controller.alipayNotify(request);
+
+        assertEquals(500, response.getCode());
+        assertEquals("Signature verification failed", response.getMessage());
+        verifyNoInteractions(orderService, profitService);
     }
 
     @Test
