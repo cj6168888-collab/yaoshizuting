@@ -67,7 +67,7 @@ public class WithdrawalController {
     private BigDecimal requiredBigDecimal(Map<String, Object> params, String key, String label) {
         Object value = requiredValue(params, key, label);
         try {
-            return new BigDecimal(value.toString());
+            return new BigDecimal(value.toString().trim());
         } catch (NumberFormatException ex) {
             throw new BusinessException(400, label + "格式无效");
         }
@@ -76,7 +76,7 @@ public class WithdrawalController {
     private Integer requiredInteger(Map<String, Object> params, String key, String label) {
         Object value = requiredValue(params, key, label);
         try {
-            return Integer.parseInt(value.toString());
+            return Integer.parseInt(value.toString().trim());
         } catch (NumberFormatException ex) {
             throw new BusinessException(400, label + "格式无效");
         }
@@ -85,7 +85,7 @@ public class WithdrawalController {
     private Long requiredLong(Map<String, Object> params, String key, String label) {
         Object value = requiredValue(params, key, label);
         try {
-            return Long.parseLong(value.toString());
+            return Long.parseLong(value.toString().trim());
         } catch (NumberFormatException ex) {
             throw new BusinessException(400, label + "格式无效");
         }
@@ -96,10 +96,11 @@ public class WithdrawalController {
         if (value instanceof Boolean boolValue) {
             return boolValue;
         }
-        if ("true".equalsIgnoreCase(value.toString())) {
+        String text = value.toString().trim();
+        if ("true".equalsIgnoreCase(text)) {
             return true;
         }
-        if ("false".equalsIgnoreCase(value.toString())) {
+        if ("false".equalsIgnoreCase(text)) {
             return false;
         }
         throw new BusinessException(400, label + "格式无效");

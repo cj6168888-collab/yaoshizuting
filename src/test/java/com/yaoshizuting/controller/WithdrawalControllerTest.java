@@ -126,6 +126,44 @@ class WithdrawalControllerTest {
     }
 
     @Test
+    void apply_WithWhitespaceWrappedNumericFields_ParsesAndDelegates() throws Exception {
+        Withdrawal withdrawal = new Withdrawal();
+        withdrawal.setWithdrawSn("WD-TEST-003");
+        withdrawal.setAmount(new BigDecimal("400.00"));
+
+        when(jwtUtils.getUserIdFromToken("withdraw-token")).thenReturn(10L);
+        when(withdrawalService.createWithdrawal(
+                10L,
+                new BigDecimal("400.00"),
+                3,
+                "bank-account",
+                "account-name",
+                "bank-name"))
+                .thenReturn(withdrawal);
+
+        mockMvc.perform(post("/withdrawal/apply")
+                .header("Authorization", "Bearer withdraw-token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                        "amount", " 400.00 ",
+                        "withdrawType", " 3 ",
+                        "accountNo", "bank-account",
+                        "accountName", "account-name",
+                        "bankName", "bank-name"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.data.withdrawSn").value("WD-TEST-003"));
+
+        verify(withdrawalService).createWithdrawal(
+                10L,
+                new BigDecimal("400.00"),
+                3,
+                "bank-account",
+                "account-name",
+                "bank-name");
+    }
+
+    @Test
     void apply_WithoutBearerToken_ReturnsBusinessUnauthorized() throws Exception {
         mockMvc.perform(post("/withdrawal/apply")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -144,6 +182,21 @@ class WithdrawalControllerTest {
                 .content(objectMapper.writeValueAsString(Map.of(
                         "withdrawalId", 9,
                         "approved", true,
+                        "remark", "通过"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.data").value("审核完成"));
+
+        verify(withdrawalService).approveWithdrawal(9L, true, "通过");
+    }
+
+    @Test
+    void approve_WithWhitespaceWrappedFields_ParsesAndDelegates() throws Exception {
+        mockMvc.perform(put("/withdrawal/approve")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                        "withdrawalId", " 9 ",
+                        "approved", " true ",
                         "remark", "通过"))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(200))
