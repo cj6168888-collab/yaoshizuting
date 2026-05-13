@@ -45,6 +45,9 @@ cd yaishizuting
 # 启动服务
 docker-compose up -d
 
+# 烟测（等待 healthcheck 并检查前后端是否正常）
+powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\smoke.ps1
+
 # 访问系统
 # 前端: http://localhost:3001
 # 后端: http://localhost:8090/api
