@@ -11,6 +11,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.util.stream.Collectors;
 
@@ -50,6 +51,13 @@ public class GlobalExceptionHandler {
     public ApiResponse<Void> handleHttpMessageNotReadableException(HttpMessageNotReadableException e) {
         log.error("请求体解析异常: {}", e.getMessage());
         return ApiResponse.error(400, "请求体格式无效");
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiResponse<Void> handleMethodArgumentTypeMismatchException(MethodArgumentTypeMismatchException e) {
+        log.error("参数类型异常: {}={}", e.getName(), e.getValue());
+        return ApiResponse.error(400, e.getName() + "格式无效");
     }
 
     @ExceptionHandler(RateLimitExceededException.class)

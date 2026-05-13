@@ -8,6 +8,7 @@ import org.springframework.validation.BindException;
 import org.springframework.validation.FieldError;
 import org.springframework.validation.MapBindingResult;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.lang.reflect.Method;
 import java.util.HashMap;
@@ -62,6 +63,21 @@ class GlobalExceptionHandlerTest {
 
         assertEquals(429, response.getCode());
         assertEquals("too many requests", response.getMessage());
+    }
+
+    @Test
+    void handleMethodArgumentTypeMismatchExceptionReturnsBadRequestCode() throws Exception {
+        MethodArgumentTypeMismatchException exception = new MethodArgumentTypeMismatchException(
+                "abc",
+                Long.class,
+                "parentId",
+                methodParameter(),
+                new NumberFormatException("bad number"));
+
+        ApiResponse<Void> response = handler.handleMethodArgumentTypeMismatchException(exception);
+
+        assertEquals(400, response.getCode());
+        assertEquals("parentId格式无效", response.getMessage());
     }
 
     @Test
