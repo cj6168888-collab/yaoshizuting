@@ -59,7 +59,7 @@ public class ProfitServiceImpl implements ProfitService {
 
         User newUser = userMapper.selectById(order.getUserId());
         if (newUser == null) {
-            throw new BusinessException("用户不存在");
+            throw new BusinessException(404, "用户不存在");
         }
 
         newUser.setRole(UserRole.STORE.getCode());
@@ -195,7 +195,7 @@ public class ProfitServiceImpl implements ProfitService {
 
         User newAgent = userMapper.selectById(order.getUserId());
         if (newAgent == null) {
-            throw new BusinessException("用户不存在");
+            throw new BusinessException(404, "用户不存在");
         }
 
         newAgent.setRole(UserRole.AGENT.getCode());
@@ -243,7 +243,7 @@ public class ProfitServiceImpl implements ProfitService {
 
         User newPartner = userMapper.selectById(order.getUserId());
         if (newPartner == null) {
-            throw new BusinessException("用户不存在");
+            throw new BusinessException(404, "用户不存在");
         }
 
         newPartner.setRole(UserRole.PARTNER.getCode());
@@ -428,7 +428,7 @@ public class ProfitServiceImpl implements ProfitService {
     public WalletResponse getWalletInfo(Long userId) {
         User user = userMapper.selectById(userId);
         if (user == null) {
-            throw new BusinessException("用户不存在");
+            throw new BusinessException(404, "用户不存在");
         }
 
         WalletResponse response = new WalletResponse();

@@ -91,6 +91,7 @@ public class ProfitServiceImplTest {
                 BusinessException.class,
                 () -> profitService.processJoinStoreProfit(order));
 
+        assertEquals(404, exception.getCode());
         assertEquals("用户不存在", exception.getMessage());
         verify(userMapper, never()).updateById(any());
     }
@@ -274,6 +275,7 @@ public class ProfitServiceImplTest {
                 BusinessException.class,
                 () -> profitService.processJoinAgentProfit(order));
 
+        assertEquals(404, exception.getCode());
         assertEquals("用户不存在", exception.getMessage());
         verify(userMapper, never()).updateById(any());
     }
@@ -377,6 +379,7 @@ public class ProfitServiceImplTest {
                 BusinessException.class,
                 () -> profitService.processJoinPartnerProfit(order));
 
+        assertEquals(404, exception.getCode());
         assertEquals("用户不存在", exception.getMessage());
         verify(userMapper, never()).updateById(any());
     }
@@ -612,6 +615,7 @@ public class ProfitServiceImplTest {
                 BusinessException.class,
                 () -> profitService.getWalletInfo(50L));
 
+        assertEquals(404, exception.getCode());
         assertEquals("用户不存在", exception.getMessage());
         verify(profitLogMapper, never()).selectByReceiverId(anyLong());
     }
