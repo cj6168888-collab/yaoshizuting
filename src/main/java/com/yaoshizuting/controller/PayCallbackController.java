@@ -38,7 +38,7 @@ public class PayCallbackController {
 
         if (!signatureService.isAllowedIP(clientIP)) {
             log.warn("Wechat callback IP not allowed: {}", clientIP);
-            return ApiResponse.error("Forbidden");
+            return ApiResponse.error(403, "Forbidden");
         }
 
         String body = readRequestBody(request);
@@ -48,7 +48,7 @@ public class PayCallbackController {
 
         if (!signatureService.verifyWechatSignature(signature, body, timestamp, nonce)) {
             log.error("Wechat signature verification failed");
-            return ApiResponse.error("Signature verification failed");
+            return ApiResponse.error(400, "Signature verification failed");
         }
 
         Map<String, Object> params = parseWechatNotify(body);
@@ -70,14 +70,14 @@ public class PayCallbackController {
 
         if (!signatureService.isAllowedIP(clientIP)) {
             log.warn("Alipay callback IP not allowed: {}", clientIP);
-            return ApiResponse.error("Forbidden");
+            return ApiResponse.error(403, "Forbidden");
         }
 
         Map<String, String> params = parseAlipayParams(request);
 
         if (!signatureService.verifyAlipaySignature(params)) {
             log.error("Alipay signature verification failed");
-            return ApiResponse.error("Signature verification failed");
+            return ApiResponse.error(400, "Signature verification failed");
         }
 
         String orderSn = params.get("out_trade_no");
@@ -96,7 +96,7 @@ public class PayCallbackController {
         Order order = orderService.getOrderByOrderSn(orderSn);
         if (order == null) {
             log.error("Order not found: orderSn={}", orderSn);
-            return ApiResponse.error("Order not found");
+            return ApiResponse.error(404, "Order not found");
         }
 
         if (order.getStatus() == OrderStatus.PAID.getCode()

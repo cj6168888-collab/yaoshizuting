@@ -179,7 +179,7 @@ class PayCallbackControllerTest {
                     return request;
                 }))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(500))
+                .andExpect(jsonPath("$.code").value(403))
                 .andExpect(jsonPath("$.message").value("Forbidden"));
 
         verify(signatureService, never()).verifyWechatSignature(null, "{}", null, null);
@@ -221,7 +221,7 @@ class PayCallbackControllerTest {
                     return request;
                 }))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(500))
+                .andExpect(jsonPath("$.code").value(403))
                 .andExpect(jsonPath("$.message").value("Forbidden"));
 
         verify(signatureService, never()).verifyAlipaySignature(anyMap());
@@ -241,7 +241,7 @@ class PayCallbackControllerTest {
                     return request;
                 }))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(500))
+                .andExpect(jsonPath("$.code").value(400))
                 .andExpect(jsonPath("$.message").value("Signature verification failed"));
 
         verifyNoInteractions(orderService, profitService);
@@ -327,7 +327,7 @@ class PayCallbackControllerTest {
 
         ApiResponse<Void> response = controller.wechatNotify(request);
 
-        assertEquals(500, response.getCode());
+        assertEquals(400, response.getCode());
         assertEquals("Signature verification failed", response.getMessage());
         verifyNoInteractions(orderService, profitService);
     }
@@ -353,7 +353,7 @@ class PayCallbackControllerTest {
                     return request;
                 }))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(500))
+                .andExpect(jsonPath("$.code").value(404))
                 .andExpect(jsonPath("$.message").value("Order not found"));
 
         verify(orderService, never()).updateOrderStatus("ORD-MISSING", OrderStatus.PAID.getCode(), "WX-TX-MISSING");
@@ -377,7 +377,7 @@ class PayCallbackControllerTest {
 
         ApiResponse<Void> response = controller.alipayNotify(request);
 
-        assertEquals(500, response.getCode());
+        assertEquals(400, response.getCode());
         assertEquals("Signature verification failed", response.getMessage());
         verifyNoInteractions(orderService, profitService);
     }

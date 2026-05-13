@@ -77,7 +77,7 @@ class SecurityIntegrationTest {
                 .contentType("application/json")
                 .content("{\"out_trade_no\":\"ORDER123\",\"result_code\":\"SUCCESS\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(500));
+                .andExpect(jsonPath("$.code").value(400));
     }
 
     @Test
