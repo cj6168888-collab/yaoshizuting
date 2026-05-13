@@ -6,17 +6,19 @@ import logoUrl from './static/logo.jpg';
 
 const api = axios.create({ baseURL, timeout: 15000 });
 
-const currentView = ref('login');
+const token = ref(localStorage.getItem('token') || '');
+const currentView = ref(token.value ? 'dashboard' : 'home');
 const activeMenu = ref('wallet');
 const mobile = ref('');
 const code = ref('');
-const token = ref(localStorage.getItem('token') || '');
 const role = ref(parseInt(localStorage.getItem('role') || '0', 10));
 const user = ref(JSON.parse(localStorage.getItem('user') || '{}'));
 const loading = ref(false);
 const countdown = ref(0);
 const loginError = ref('');
 let codeTimer = null;
+
+const inviteContext = ref(parseInviteContext());
 
 const wallet = ref(null);
 const team = ref([]);
@@ -74,6 +76,7 @@ const withdrawalPage = ref({ page: 1, size: 20 });
 const profitPage = ref({ page: 1, size: 20 });
 
 const isAdmin = computed(() => Number(role.value) >= 9);
+const inviterName = computed(() => inviteContext.value.inviterName || inviteContext.value.mobile || '药师祖庭会员');
 const canJoinStore = computed(() => Number(role.value) < 1);
 const canJoinAgent = computed(() => Number(role.value) >= 1 && Number(role.value) < 2);
 const canJoinPartner = computed(() => Number(role.value) >= 2 && Number(role.value) < 3);
@@ -204,6 +207,30 @@ function isFailureMessage(message) {
   return /失败|错误|异常|超时|无权|过期|不可用|不存在/.test(message || '');
 }
 
+function parseInviteContext() {
+  const params = new URLSearchParams(window.location.search);
+  const hashParams = new URLSearchParams(window.location.hash.split('?')[1] || '');
+  const read = (key) => params.get(key) || hashParams.get(key) || '';
+  return {
+    parentId: read('parentId') || read('scene'),
+    mobile: read('mobile') || read('inviteCode'),
+    inviterName: read('inviterName') || read('nickname')
+  };
+}
+
+function goHome() {
+  if (token.value) {
+    currentView.value = 'dashboard';
+    return;
+  }
+  currentView.value = 'home';
+}
+
+function goLogin() {
+  currentView.value = 'login';
+  loginError.value = '';
+}
+
 function formatMoney(amount) {
   return parseFloat(amount || 0).toLocaleString('zh-CN', {
     minimumFractionDigits: 2,
@@ -306,7 +333,11 @@ async function login() {
 
   loading.value = true;
   try {
-    const data = unwrap(await api.post('/auth/login', { mobile: mobile.value, code: code.value }));
+    const payload = { mobile: mobile.value, code: code.value };
+    if (inviteContext.value.mobile) {
+      payload.inviteCode = inviteContext.value.mobile;
+    }
+    const data = unwrap(await api.post('/auth/login', payload));
     token.value = data.token;
     role.value = data.role;
     user.value = data;
@@ -498,7 +529,11 @@ function evaluatePolicyWarnings(values) {
 
 async function loadInviteQr() {
   try {
-    inviteQrData.value = unwrap(await api.get('/user/invite-qr', { headers: authHeaders() }));
+    const data = unwrap(await api.get('/user/invite-qr', { headers: authHeaders() }));
+    inviteQrData.value = data;
+    if (!parentId.value && data?.parentId) {
+      parentId.value = String(data.parentId);
+    }
   } catch (error) {
     bindResult.value = { error: errorMessage(error, '获取邀请信息失败') };
   }
@@ -541,6 +576,20 @@ async function lockParentBind() {
   } finally {
     bindingLoading.value = false;
   }
+}
+
+async function copyInviteLink() {
+  if (!inviteQrData.value?.inviteUrl) return;
+  try {
+    await navigator.clipboard.writeText(inviteQrData.value.inviteUrl);
+    bindResult.value = { code: 200, message: '邀请链接已复制，可转发给新会员' };
+  } catch (error) {
+    bindResult.value = { error: '复制失败，请手动复制邀请链接' };
+  }
+}
+
+function showPosterSaveTip() {
+  bindResult.value = { code: 200, message: '当前版本已生成海报样式，可截图或保存小程序海报转发' };
 }
 
 async function loadProducts() {
@@ -820,7 +869,7 @@ function logout() {
   joinMessage.value = '';
   withdrawalMessage.value = '';
   localStorage.clear();
-  currentView.value = 'login';
+  currentView.value = 'home';
   mobile.value = '';
   code.value = '';
   countdown.value = 0;
@@ -865,7 +914,66 @@ onUnmounted(clearCodeTimer);
 
 <template>
   <div id="app">
-    <div v-if="currentView === 'login'" class="login-page">
+    <div v-if="currentView === 'home'" class="growth-home">
+      <header class="mini-topbar">
+        <div class="mini-brand"><img :src="logoUrl" alt="药师祖庭" /><span>药师祖庭</span></div>
+        <button class="mini-login" @click="goLogin">登录 / 注册</button>
+      </header>
+
+      <section class="growth-hero">
+        <div class="hero-copy">
+          <span class="hero-eyebrow">药食同源 · 匠心传承</span>
+          <h1>把健康好礼，带给身边每一位朋友</h1>
+          <p>扫码进入微信小程序式 H5 首页，领取新人专享礼，完成手机号注册后自动承接推荐关系。</p>
+          <div class="hero-actions">
+            <button class="hero-primary" @click="goLogin">立即注册领取</button>
+            <a class="hero-secondary" href="#poster">查看转发海报</a>
+          </div>
+        </div>
+        <div class="hero-product">
+          <img :src="logoUrl" alt="药师祖庭" />
+          <div>
+            <b>新人专享礼</b>
+            <span>注册即享专属礼包</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="growth-benefits">
+        <div><b>正品保证</b><span>严选溯源产品</span></div>
+        <div><b>会员专享</b><span>礼包与积分权益</span></div>
+        <div><b>推荐有礼</b><span>海报转发锁定关系</span></div>
+        <div><b>售后无忧</b><span>服务流程可追踪</span></div>
+      </section>
+
+      <section class="promo-card">
+        <div class="promo-copy">
+          <span>活动中心</span>
+          <h2>新人专享福利</h2>
+          <p>注册即领礼，首单享优惠，推荐好友加入还可获得积分奖励。</p>
+        </div>
+        <button @click="goLogin">马上领取</button>
+      </section>
+
+      <section id="poster" class="share-poster">
+        <div class="poster-art">
+          <div class="poster-title">扫码加入 药师祖庭</div>
+          <div class="poster-qr">QR</div>
+          <div class="poster-ref">
+            <img :src="logoUrl" alt="" />
+            <div><span>推荐人</span><b>{{ inviterName }}</b></div>
+          </div>
+        </div>
+        <div class="poster-copy">
+          <h2>商机二维码可转发</h2>
+          <p>用户从海报或二维码进入后，直接完成手机号注册；若链接包含推荐手机号，将自动带入推荐关系。</p>
+          <code v-if="inviteContext.parentId || inviteContext.mobile">推荐参数：{{ inviteContext.parentId || '-' }} / {{ inviteContext.mobile || '-' }}</code>
+          <button class="hero-primary" @click="goLogin">扫码进入注册</button>
+        </div>
+      </section>
+    </div>
+
+    <div v-else-if="currentView === 'login'" class="login-page">
       <div class="login-bg"></div>
 
       <div class="login-container">
@@ -878,8 +986,13 @@ onUnmounted(clearCodeTimer);
         </div>
 
         <div class="login-card">
+          <button class="back-home" @click="goHome">返回首页</button>
           <div class="card-tabs">
             <span class="tab active">手机登录</span>
+          </div>
+          <div v-if="inviteContext.parentId || inviteContext.mobile" class="invite-hint">
+            <b>推荐注册</b>
+            <span>推荐人：{{ inviterName }}<template v-if="inviteContext.parentId"> · ID {{ inviteContext.parentId }}</template></span>
           </div>
           <div class="input-group">
             <label>手机号</label>
@@ -1134,15 +1247,20 @@ onUnmounted(clearCodeTimer);
           <div class="panel-card">
             <div class="pc-header"><h3>我的邀请码</h3></div>
             <div v-if="inviteQrData" class="invite-block">
-              <div class="qr-card">
+              <div class="qr-card share-card">
                 <img class="qr-logo" :src="logoUrl" alt="药师祖庭" />
-                <p class="qr-title">扫码锁定下级</p>
+                <p class="qr-title">扫码加入药师祖庭</p>
                 <div class="qr-meta">
                   <span>邀请人: <b>{{ inviteQrData.parentNickname }}</b></span>
                   <span>ID: <b>{{ inviteQrData.parentId }}</b></span>
                 </div>
-                <p class="qr-hint">将链接发给新会员，绑定上下级关系</p>
+                <div class="mini-qr-box">QR</div>
+                <p class="qr-hint">带海报转发，新会员点击或扫码进入后直接注册并绑定关系</p>
                 <code class="qr-link">{{ inviteQrData.inviteUrl }}</code>
+                <div class="poster-actions">
+                  <button class="btn-main" @click="copyInviteLink">复制链接</button>
+                  <button class="btn-main outline" type="button" @click="showPosterSaveTip">保存海报</button>
+                </div>
               </div>
             </div>
             <div v-else class="empty-box brand-empty">
@@ -1444,6 +1562,42 @@ body { font-family: -apple-system, "SF Pro Display", "Segoe UI", Roboto, sans-se
 button, input, select, textarea { font: inherit; }
 button { cursor: pointer; }
 
+.growth-home { min-height: 100vh; background: #f4f7ef; color: var(--text1); padding-bottom: 88px; overflow-x: hidden; }
+.mini-topbar { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px max(18px, calc((100vw - 1120px) / 2)); background: rgba(255, 255, 255, .92); border-bottom: 1px solid #e5ebdc; backdrop-filter: blur(12px); }
+.mini-brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 800; color: var(--pri-dark); }
+.mini-brand img { width: 34px; height: 34px; border-radius: 8px; object-fit: cover; }
+.mini-login { min-height: 36px; padding: 0 14px; border: 1px solid #cfe4c5; border-radius: 8px; background: #eef6e8; color: var(--pri); font-size: 13px; font-weight: 800; }
+.growth-hero { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 34px; align-items: center; width: min(1120px, calc(100% - 32px)); margin: 28px auto 18px; padding: 46px; border: 1px solid #dce8d3; border-radius: 8px; background: linear-gradient(135deg, rgba(255, 255, 255, .9) 0%, rgba(232, 242, 225, .92) 48%, rgba(36, 95, 30, .18) 100%); box-shadow: 0 16px 44px rgba(31, 68, 22, .1); }
+.hero-eyebrow { display: inline-flex; margin-bottom: 14px; padding: 5px 10px; border-radius: 8px; background: #eef6e8; color: var(--pri); font-size: 13px; font-weight: 800; }
+.hero-copy h1 { max-width: 650px; margin-bottom: 14px; font-size: 38px; line-height: 1.18; color: var(--pri-dark); overflow-wrap: anywhere; }
+.hero-copy p { max-width: 620px; color: #58714e; font-size: 16px; overflow-wrap: anywhere; }
+.hero-actions { display: flex; gap: 12px; margin-top: 26px; flex-wrap: wrap; }
+.hero-primary, .hero-secondary, .promo-card button { display: inline-flex; min-height: 44px; align-items: center; justify-content: center; padding: 0 20px; border-radius: 8px; font-weight: 800; text-decoration: none; }
+.hero-primary, .promo-card button { border: 0; background: var(--pri); color: #fff; box-shadow: 0 8px 18px rgba(43, 107, 31, .18); }
+.hero-secondary { border: 1px solid #cfe4c5; background: #fff; color: var(--pri); }
+.hero-product { display: grid; justify-items: center; gap: 16px; padding: 28px 22px; border-radius: 8px; background: linear-gradient(180deg, #0d4b27 0%, #176832 100%); color: #fff; text-align: center; box-shadow: 0 12px 30px rgba(31, 68, 22, .18); }
+.hero-product img { width: 116px; height: 116px; border-radius: 8px; object-fit: cover; box-shadow: 0 10px 24px rgba(0,0,0,.16); }
+.hero-product b { display: block; color: #f3d47b; font-size: 20px; }
+.hero-product span { color: rgba(255,255,255,.78); font-size: 13px; }
+.growth-benefits { width: min(1120px, calc(100% - 32px)); margin: 0 auto 18px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.growth-benefits div { padding: 16px; border: 1px solid #e2ead9; border-radius: 8px; background: #fff; }
+.growth-benefits b { display: block; color: var(--pri-dark); font-size: 15px; }
+.growth-benefits span { color: var(--text3); font-size: 12px; }
+.promo-card, .share-poster { width: min(1120px, calc(100% - 32px)); margin: 0 auto 18px; border: 1px solid #e2ead9; border-radius: 8px; background: #fff; box-shadow: var(--shadow-soft); }
+.promo-card { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 24px; background: linear-gradient(135deg, #fff 0%, #fff9eb 100%); }
+.promo-copy span { color: #b76a00; font-size: 13px; font-weight: 800; }
+.promo-copy h2, .poster-copy h2 { color: var(--pri-dark); font-size: 24px; }
+.promo-copy p, .poster-copy p { color: var(--text2); }
+.share-poster { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 24px; padding: 24px; align-items: center; }
+.poster-art { padding: 20px; border-radius: 8px; background: linear-gradient(180deg, #0d4b27 0%, #177038 100%); color: #fff; text-align: center; }
+.poster-title { margin-bottom: 16px; color: #f3d47b; font-size: 22px; font-weight: 900; }
+.poster-qr { width: 168px; height: 168px; margin: 0 auto 16px; display: grid; place-items: center; border: 10px solid #fff; border-radius: 8px; background: repeating-linear-gradient(45deg, #172615 0 8px, #fff 8px 16px); color: transparent; }
+.poster-ref { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 8px; background: rgba(255,255,255,.12); text-align: left; }
+.poster-ref img { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; }
+.poster-ref span { display: block; color: rgba(255,255,255,.72); font-size: 12px; }
+.poster-ref b { color: #fff; }
+.poster-copy code { display: block; margin: 14px 0; padding: 10px 12px; border: 1px solid #e2ead9; border-radius: 8px; background: #fbfcf8; color: var(--text3); word-break: break-all; }
+
 .login-page { min-height: 100vh; padding: 32px 16px; background: radial-gradient(circle at 80% 18%, rgba(199, 222, 185, .48), transparent 32%), linear-gradient(160deg, #eef5e8 0%, #f8faf4 48%, #dfead6 100%); display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
 .login-bg { position: absolute; inset: 0; overflow: hidden; background: linear-gradient(120deg, rgba(29, 68, 22, .08), rgba(255,255,255,0) 46%), linear-gradient(180deg, rgba(255,255,255,.5), rgba(255,255,255,0)); }
 .login-container { position: relative; z-index: 1; width: min(392px, 100%); }
@@ -1453,8 +1607,12 @@ button { cursor: pointer; }
 .brand-name { font-size: 34px; font-weight: 700; color: var(--pri-dark); }
 .brand-sub { color: #58714e; font-size: 14px; margin-top: 4px; letter-spacing: 3px; }
 .login-card { background: rgba(255, 255, 255, .94); border: 1px solid #dfe8d7; border-radius: 8px; padding: 30px 28px; box-shadow: 0 18px 50px rgba(31, 68, 22, .13); backdrop-filter: blur(10px); }
+.back-home { margin: 0 0 16px; padding: 0; border: 0; background: transparent; color: var(--pri); font-size: 13px; font-weight: 800; }
 .card-tabs { margin-bottom: 24px; padding-bottom: 12px; border-bottom: 1px solid #edf1e7; }
 .tab { display: inline-flex; align-items: center; min-height: 30px; border-bottom: 2px solid var(--pri); font-size: 18px; font-weight: 700; color: var(--pri); }
+.invite-hint { margin-bottom: 18px; padding: 12px; border: 1px solid #e2ead9; border-radius: 8px; background: #fbfcf8; }
+.invite-hint b { display: block; color: var(--pri-dark); font-size: 14px; }
+.invite-hint span { color: var(--text3); font-size: 12px; }
 .input-group { margin-bottom: 18px; }
 .input-group label { display: block; font-size: 13px; font-weight: 600; color: var(--text2); margin-bottom: 6px; }
 .input-box input { width: 100%; height: 48px; padding: 0 14px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 16px; background: #fbfcf8; transition: all .25s; }
@@ -1551,12 +1709,19 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--p
 
 .invite-block { padding: 24px; text-align: center; }
 .qr-card { padding: 34px 24px; background: #fff; border: 1px solid #e4eadc; border-radius: 8px; box-shadow: inset 0 0 0 6px #f7faf3; }
+.qr-card.share-card { max-width: 420px; margin: 0 auto; background: linear-gradient(180deg, #0d4b27 0%, #176832 100%); color: #fff; box-shadow: 0 14px 36px rgba(31, 68, 22, .16); }
 .qr-logo { width: 76px; height: 76px; border-radius: 8px; object-fit: cover; box-shadow: 0 8px 24px rgba(31, 68, 22, .16); margin-bottom: 14px; }
 .qr-title { font-size: 18px; font-weight: 700; color: var(--pri); margin-bottom: 16px; }
+.share-card .qr-title { color: #f3d47b; }
 .qr-meta { display: flex; justify-content: center; gap: 32px; font-size: 14px; color: var(--text2); flex-wrap: wrap; }
 .qr-meta b { color: var(--pri); }
+.share-card .qr-meta { color: rgba(255,255,255,.78); }
+.share-card .qr-meta b { color: #fff; }
+.mini-qr-box { width: 156px; height: 156px; margin: 18px auto; display: grid; place-items: center; border: 10px solid #fff; border-radius: 8px; background: repeating-linear-gradient(45deg, #172615 0 8px, #fff 8px 16px); color: transparent; }
 .qr-hint { margin-top: 16px; font-size: 12px; color: var(--text3); }
+.share-card .qr-hint { color: rgba(255,255,255,.78); }
 .qr-link { display: block; margin-top: 12px; padding: 10px 14px; background: #fff; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; color: var(--text3); word-break: break-all; }
+.poster-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
 
 .bind-panel { padding-bottom: 4px; }
 .bind-row { display: flex; gap: 12px; padding: 0 24px 16px; }
@@ -1641,6 +1806,17 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--p
 }
 
 @media (max-width: 768px) {
+  .mini-topbar { padding: 10px 14px; }
+  .growth-hero { grid-template-columns: 1fr; gap: 22px; margin-top: 16px; padding: 24px 18px; }
+  .hero-copy h1 { font-size: 30px; }
+  .hero-copy p { font-size: 14px; }
+  .hero-actions, .promo-card { align-items: stretch; flex-direction: column; }
+  .hero-primary, .hero-secondary, .promo-card button { width: 100%; }
+  .hero-product { padding: 22px 18px; }
+  .growth-benefits { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .promo-card { padding: 18px; }
+  .share-poster { grid-template-columns: 1fr; padding: 18px; }
+  .poster-art { max-width: 360px; width: 100%; margin: 0 auto; }
   .app-layout { display: block; min-height: 100vh; padding-bottom: 82px; }
   .sidebar { position: fixed; inset: auto 0 0; width: 100%; height: auto; background: rgba(255, 255, 255, .96); color: var(--text2); border-top: 1px solid #e7ecdf; box-shadow: 0 -8px 28px rgba(31, 68, 22, .1); backdrop-filter: blur(12px); }
   .sidebar-brand, .sidebar-user { display: none; }
@@ -1684,6 +1860,14 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--p
 }
 
 @media (max-width: 480px) {
+  .growth-home { padding-bottom: 72px; }
+  .mini-brand span { font-size: 15px; }
+  .mini-login { padding: 0 10px; }
+  .growth-hero, .growth-benefits, .promo-card, .share-poster { width: calc(100% - 24px); }
+  .growth-benefits { gap: 10px; }
+  .growth-benefits div { padding: 13px; }
+  .hero-copy h1 { font-size: 28px; }
+  .poster-qr { width: 150px; height: 150px; }
   .login-page { align-items: flex-start; padding: 42px 14px 24px; }
   .login-container { max-width: 340px; }
   .login-brand { margin-bottom: 22px; }

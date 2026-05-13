@@ -65,3 +65,19 @@ Implementation notes:
 - Keep the SMS code action attached to the code input and sized as a clear touch target.
 - Make quick test accounts read as role chips rather than plain text buttons.
 - Keep mobile login spacing compact enough that the whole flow remains visible without awkward scrolling.
+
+## imagegen-miniprogram-growth-home.png
+
+Generated with the built-in image generation tool as a WeChat mini program / H5 growth-home reference.
+
+Prompt summary:
+- Conversion-focused 药师祖庭 mini program homepage with product promotion, brand story, activity poster, invitation poster, and registration handoff.
+- Shared business QR poster includes inviter information, QR placeholder, new-user benefits, and clear scan-to-register CTA.
+- Deep medicinal green, herbal green, warm gold, white cards, pale sage background, and professional wellness commerce tone.
+- Avoid dashboard-first layout, purple/blue gradients, cartoon style, fake browser chrome, and oversized SaaS hero patterns.
+
+Implementation notes:
+- Let unauthenticated users land on a promotional home page before the login form.
+- Keep the invitation poster visually shareable and make it clear that scanning/clicking continues into registration.
+- Preserve invite query parameters through the phone-login payload so downstream registration can bind referral relationships.
+- Treat this as a mini-program-style H5 shell: sticky top bar, mobile-first CTA, and thumb-friendly cards.
