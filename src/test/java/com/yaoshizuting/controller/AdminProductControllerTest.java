@@ -208,6 +208,28 @@ class AdminProductControllerTest {
     }
 
     @Test
+    void listProducts_WithInvalidProductType_ReturnsBusinessError() throws Exception {
+        mockMvc.perform(get("/api/admin/product/list")
+                .contextPath("/api")
+                .header("Authorization", adminToken)
+                .param("productType", "99"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(400))
+                .andExpect(jsonPath("$.message").value("商品类型无效"));
+    }
+
+    @Test
+    void listProducts_WithInvalidStatus_ReturnsBusinessError() throws Exception {
+        mockMvc.perform(get("/api/admin/product/list")
+                .contextPath("/api")
+                .header("Authorization", adminToken)
+                .param("status", "9"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(400))
+                .andExpect(jsonPath("$.message").value("商品状态无效"));
+    }
+
+    @Test
     void exportProducts_WithAdminToken_ReturnsCsv() throws Exception {
         String productCode = nextProductCode();
         ProductUpsertRequest request = buildRequest(productCode);
@@ -229,6 +251,17 @@ class AdminProductControllerTest {
                         result.getResponse().getHeader("Content-Disposition").contains("products.csv")))
                 .andExpect(result -> org.junit.jupiter.api.Assertions.assertTrue(
                         result.getResponse().getContentAsString().contains(productCode)));
+    }
+
+    @Test
+    void exportProducts_WithInvalidStatus_ReturnsBusinessError() throws Exception {
+        mockMvc.perform(get("/api/admin/product/export")
+                .contextPath("/api")
+                .header("Authorization", adminToken)
+                .param("status", "9"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(400))
+                .andExpect(jsonPath("$.message").value("商品状态无效"));
     }
 
     private String nextProductCode() {

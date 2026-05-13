@@ -21,6 +21,8 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     public List<Product> listActiveProducts(Integer productType) {
+        validateOptionalProductType(productType);
+
         LambdaQueryWrapper<Product> wrapper = new LambdaQueryWrapper<Product>()
                 .eq(Product::getStatus, 1)
                 .orderByAsc(Product::getProductType)
@@ -93,6 +95,12 @@ public class ProductServiceImpl implements ProductService {
         product.setUnit(StrUtil.blankToDefault(request.getUnit(), "套"));
         product.setImage(blankToNull(request.getImage()));
         product.setDescription(blankToNull(request.getDescription()));
+    }
+
+    private void validateOptionalProductType(Integer productType) {
+        if (productType != null && (productType < 1 || productType > 3)) {
+            throw new BusinessException(400, "商品类型无效");
+        }
     }
 
     private void validateProductType(Integer productType) {

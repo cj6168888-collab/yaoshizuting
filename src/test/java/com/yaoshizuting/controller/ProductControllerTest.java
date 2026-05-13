@@ -53,4 +53,17 @@ class ProductControllerTest {
                 .andExpect(jsonPath("$.data.length()").value(org.hamcrest.Matchers.greaterThanOrEqualTo(1)))
                 .andExpect(jsonPath("$.data[0].productType").value(2));
     }
+
+    @Test
+    void listProducts_WithInvalidProductType_ReturnsBusinessError() throws Exception {
+        String token = jwtUtils.generateToken(1L, "13800138000", 1);
+
+        mockMvc.perform(get("/api/product/list")
+                .contextPath("/api")
+                .param("productType", "99")
+                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(400))
+                .andExpect(jsonPath("$.message").value("商品类型无效"));
+    }
 }

@@ -6,6 +6,7 @@ import com.yaoshizuting.annotation.AuditLog;
 import com.yaoshizuting.dto.ApiResponse;
 import com.yaoshizuting.dto.ProductUpsertRequest;
 import com.yaoshizuting.entity.Product;
+import com.yaoshizuting.exception.BusinessException;
 import com.yaoshizuting.mapper.ProductMapper;
 import com.yaoshizuting.service.FileStorageService;
 import com.yaoshizuting.service.ProductService;
@@ -51,6 +52,7 @@ public class AdminProductController {
             @Parameter(description = "状态：0下架，1上架", example = "1") @RequestParam(required = false) Integer status,
             @Parameter(description = "商品名或编码关键字", example = "店铺") @RequestParam(required = false) String keyword) {
 
+        validateListFilters(productType, status);
         LambdaQueryWrapper<Product> wrapper = buildListWrapper(productType, status, keyword);
         Page<Product> result = productMapper.selectPage(new Page<>(page, Math.min(size, 100)), wrapper);
         return ApiResponse.success(Map.of(
@@ -68,6 +70,7 @@ public class AdminProductController {
             @Parameter(description = "状态：0下架，1上架", example = "1") @RequestParam(required = false) Integer status,
             @Parameter(description = "商品名或编码关键字", example = "店铺") @RequestParam(required = false) String keyword) {
 
+        validateListFilters(productType, status);
         LambdaQueryWrapper<Product> wrapper = buildListWrapper(productType, status, keyword)
                 .last("LIMIT 5000");
         byte[] csv = CsvExportUtils.toCsv(
@@ -136,6 +139,15 @@ public class AdminProductController {
                         .like(Product::getProductCode, keyword))
                 .orderByDesc(Product::getUpdateTime)
                 .orderByDesc(Product::getId);
+    }
+
+    private void validateListFilters(Integer productType, Integer status) {
+        if (productType != null && (productType < 1 || productType > 3)) {
+            throw new BusinessException(400, "商品类型无效");
+        }
+        if (status != null && status != 0 && status != 1) {
+            throw new BusinessException(400, "商品状态无效");
+        }
     }
 
     private ResponseEntity<byte[]> csvResponse(String filename, byte[] csv) {
