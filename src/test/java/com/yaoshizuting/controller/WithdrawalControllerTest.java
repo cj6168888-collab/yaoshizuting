@@ -89,6 +89,43 @@ class WithdrawalControllerTest {
     }
 
     @Test
+    void apply_WithNumericFieldsAsStrings_ParsesAndDelegates() throws Exception {
+        Withdrawal withdrawal = new Withdrawal();
+        withdrawal.setWithdrawSn("WD-TEST-002");
+        withdrawal.setAmount(new BigDecimal("300.00"));
+
+        when(jwtUtils.getUserIdFromToken("withdraw-token")).thenReturn(10L);
+        when(withdrawalService.createWithdrawal(
+                10L,
+                new BigDecimal("300.00"),
+                2,
+                "account-no",
+                "account-name",
+                null))
+                .thenReturn(withdrawal);
+
+        mockMvc.perform(post("/withdrawal/apply")
+                .header("Authorization", "Bearer withdraw-token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                        "amount", "300.00",
+                        "withdrawType", "2",
+                        "accountNo", "account-no",
+                        "accountName", "account-name"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.data.withdrawSn").value("WD-TEST-002"));
+
+        verify(withdrawalService).createWithdrawal(
+                10L,
+                new BigDecimal("300.00"),
+                2,
+                "account-no",
+                "account-name",
+                null);
+    }
+
+    @Test
     void apply_WithoutBearerToken_ReturnsBusinessUnauthorized() throws Exception {
         mockMvc.perform(post("/withdrawal/apply")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -113,6 +150,18 @@ class WithdrawalControllerTest {
                 .andExpect(jsonPath("$.data").value("审核完成"));
 
         verify(withdrawalService).approveWithdrawal(9L, true, "通过");
+    }
+
+    @Test
+    void approve_WithoutApproved_ReturnsBusinessBadRequest() throws Exception {
+        mockMvc.perform(put("/withdrawal/approve")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of("withdrawalId", 9))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(400))
+                .andExpect(jsonPath("$.message").value("审核结果不能为空"));
+
+        verifyNoInteractions(withdrawalService);
     }
 
     @Test

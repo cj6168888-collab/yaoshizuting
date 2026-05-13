@@ -225,6 +225,17 @@ class WithdrawalServiceImplTest {
     }
 
     @Test
+    void approveWithdrawalRejectsMissingApprovedResult() {
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> withdrawalService.approveWithdrawal(1L, null, "审核通过"));
+
+        assertEquals("审核结果不能为空", exception.getMessage());
+        verify(withdrawalMapper, never()).selectById(any());
+        verify(withdrawalMapper, never()).updateById(any());
+    }
+
+    @Test
     void approveWithdrawalRejectsMissingRecord() {
         when(withdrawalMapper.selectById(1L)).thenReturn(null);
 

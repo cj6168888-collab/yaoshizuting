@@ -52,6 +52,8 @@ public class RateLimitAspect {
         if (currentCount == null) {
             redisTemplate.opsForValue().set(key, 1, period, TimeUnit.SECONDS);
             currentCount = 1L;
+        } else if (currentCount == 1L) {
+            redisTemplate.expire(key, period, TimeUnit.SECONDS);
         }
 
         if (currentCount > limit) {

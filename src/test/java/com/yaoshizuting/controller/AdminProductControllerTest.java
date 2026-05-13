@@ -100,6 +100,19 @@ class AdminProductControllerTest {
     }
 
     @Test
+    void createProduct_WithInvalidStatus_ReturnsBadRequest() throws Exception {
+        ProductUpsertRequest request = buildRequest(nextProductCode());
+        request.setStatus(9);
+
+        mockMvc.perform(post("/api/admin/product")
+                .contextPath("/api")
+                .header("Authorization", adminToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void updateProduct_WithAdminToken_ReturnsUpdatedProduct() throws Exception {
         ProductUpsertRequest request = buildRequest(nextProductCode());
         String content = mockMvc.perform(post("/api/admin/product")

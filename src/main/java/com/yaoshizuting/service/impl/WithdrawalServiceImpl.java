@@ -86,6 +86,9 @@ public class WithdrawalServiceImpl implements WithdrawalService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void approveWithdrawal(Long withdrawalId, Boolean approved, String remark) {
+        if (approved == null) {
+            throw new BusinessException("审核结果不能为空");
+        }
         Withdrawal withdrawal = withdrawalMapper.selectById(withdrawalId);
         if (withdrawal == null) {
             throw new BusinessException("提现记录不存在");

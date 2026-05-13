@@ -1,8 +1,10 @@
 package com.yaoshizuting.controller;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yaoshizuting.dto.ApiResponse;
 import com.yaoshizuting.entity.User;
 import com.yaoshizuting.mapper.UserMapper;
+import com.yaoshizuting.service.TeamService;
 import com.yaoshizuting.utils.JwtUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.BeforeEach;
@@ -23,6 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -44,13 +47,16 @@ class ReferralControllerTest {
     private JwtUtils jwtUtils;
 
     @Mock
+    private TeamService teamService;
+
+    @Mock
     private HttpServletRequest request;
 
     private ReferralController controller;
 
     @BeforeEach
     void setUp() {
-        controller = new ReferralController(redisTemplate, userMapper, jwtUtils);
+        controller = new ReferralController(redisTemplate, userMapper, jwtUtils, teamService, new ObjectMapper());
     }
 
     @Test
@@ -235,6 +241,7 @@ class ReferralControllerTest {
         assertEquals("/0/1/9/", currentUser.getTreePath());
         assertNull(parent.getStoreCount());
         verify(userMapper).updateById(currentUser);
+        verify(teamService).evictTeamTreeCaches(currentUser);
         verify(redisTemplate).delete("referral:lock:20");
     }
 
@@ -259,6 +266,7 @@ class ReferralControllerTest {
         assertEquals("/0/1/9/", currentUser.getTreePath());
         assertEquals(1, parent.getStoreCount());
         verify(userMapper).updateById(currentUser);
+        verify(teamService).evictTeamTreeCaches(currentUser);
         verify(redisTemplate).delete("referral:lock:20");
     }
 
@@ -282,6 +290,7 @@ class ReferralControllerTest {
         assertEquals("/0/9/", currentUser.getTreePath());
         assertEquals(2, parent.getStoreCount());
         verify(userMapper).updateById(currentUser);
+        verify(teamService).evictTeamTreeCaches(currentUser);
         verify(redisTemplate).delete("referral:lock:20");
     }
 
@@ -323,7 +332,7 @@ class ReferralControllerTest {
     void lockParentRejectsUnsupportedParentIdType() {
         ApiResponse<Map<String, Object>> response = controller.lockParent(Map.of(
                 "mobile", "13800138020",
-                "parentId", "9"));
+                "parentId", "abc"));
 
         assertEquals(400, response.getCode());
         assertEquals("上级ID无效", response.getMessage());
@@ -358,7 +367,13 @@ class ReferralControllerTest {
         assertEquals(9L, response.getData().get("parentId"));
         assertEquals("上级用户", response.getData().get("parentNickname"));
         assertTrue((Boolean) response.getData().get("locked"));
-        verify(valueOperations).set(eq("invite:bind:13800138020"), any(), eq(30L), eq(TimeUnit.MINUTES));
+        verify(valueOperations).set(
+                eq("invite:bind:13800138020"),
+                argThat(value -> value instanceof String text
+                        && text.contains("\"parentId\":9")
+                        && text.contains("\"parentMobile\":\"13800138009\"")),
+                eq(30L),
+                eq(TimeUnit.MINUTES));
     }
 
     @Test
@@ -370,6 +385,21 @@ class ReferralControllerTest {
         ApiResponse<Map<String, Object>> response = controller.lockParent(Map.of(
                 "mobile", "13800138020",
                 "parentId", 9L));
+
+        assertEquals(200, response.getCode());
+        assertEquals(9L, response.getData().get("parentId"));
+        verify(valueOperations).set(eq("invite:bind:13800138020"), any(), eq(30L), eq(TimeUnit.MINUTES));
+    }
+
+    @Test
+    void lockParentAcceptsStringParentId() {
+        User parent = user(9L, "13800138009", "上级用户");
+        when(userMapper.selectById(9L)).thenReturn(parent);
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+
+        ApiResponse<Map<String, Object>> response = controller.lockParent(Map.of(
+                "mobile", "13800138020",
+                "parentId", "9"));
 
         assertEquals(200, response.getCode());
         assertEquals(9L, response.getData().get("parentId"));
@@ -389,16 +419,17 @@ class ReferralControllerTest {
 
     @Test
     void getLockedParentReturnsStoredData() {
-        Map<String, Object> lockedData = Map.of(
-                "parentId", 9L,
-                "locked", true);
+        String lockedData = """
+                {"parentId":9,"locked":true}
+                """;
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
         when(valueOperations.get("invite:bind:13800138020")).thenReturn(lockedData);
 
         ApiResponse<Map<String, Object>> response = controller.getLockedParent("13800138020");
 
         assertEquals(200, response.getCode());
-        assertEquals(lockedData, response.getData());
+        assertEquals(9L, ((Number) response.getData().get("parentId")).longValue());
+        assertEquals(true, response.getData().get("locked"));
     }
 
     private User user(Long id, String mobile, String nickname) {

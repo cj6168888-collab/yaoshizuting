@@ -1,5 +1,6 @@
 package com.yaoshizuting.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.yaoshizuting.dto.WalletResponse;
 import com.yaoshizuting.entity.Order;
 import com.yaoshizuting.entity.ProfitLog;
@@ -8,11 +9,13 @@ import com.yaoshizuting.enums.OrderStatus;
 import com.yaoshizuting.enums.ProfitType;
 import com.yaoshizuting.enums.UserRole;
 import com.yaoshizuting.exception.BusinessException;
+import com.yaoshizuting.mapper.OrderMapper;
 import com.yaoshizuting.mapper.ProfitLogMapper;
 import com.yaoshizuting.mapper.UserMapper;
 import com.yaoshizuting.mapper.WithdrawalMapper;
 import com.yaoshizuting.service.DistributedLockService;
 import com.yaoshizuting.service.PolicyConfigService;
+import com.yaoshizuting.service.TeamService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -43,6 +46,9 @@ public class ProfitServiceImplTest {
     private UserMapper userMapper;
 
     @Mock
+    private OrderMapper orderMapper;
+
+    @Mock
     private ProfitLogMapper profitLogMapper;
 
     @Mock
@@ -54,12 +60,15 @@ public class ProfitServiceImplTest {
     @Mock
     private WithdrawalMapper withdrawalMapper;
 
+    @Mock
+    private TeamService teamService;
+
     @InjectMocks
     private com.yaoshizuting.service.impl.ProfitServiceImpl profitService;
 
     @BeforeEach
     void setUp() {
-        profitService = new ProfitServiceImpl(userMapper, profitLogMapper, policyConfigService, lockService, withdrawalMapper);
+        profitService = new ProfitServiceImpl(userMapper, orderMapper, profitLogMapper, policyConfigService, lockService, withdrawalMapper, teamService);
     }
 
     @Test
@@ -102,10 +111,11 @@ public class ProfitServiceImplTest {
     }
 
     @Test
-    void processJoinStoreProfitDistributesDirectIndirectAndTeamManagementRewards() {
+    void processJoinStoreProfitRewardsSecondDirectStoreAndSkipsIndirectRewardByDefault() {
         User ancestorPartner = user(1L, UserRole.PARTNER, "0.00", "0.00");
-        ancestorPartner.setStoreCount(3);
+        ancestorPartner.setStoreCount(1);
         User parentStore = user(3L, UserRole.STORE, "0.00", "0.00");
+        parentStore.setStoreCount(1);
         User newUser = user(10L, UserRole.MEMBER, "0.00", "0.00");
         newUser.setParentId(parentStore.getId());
         newUser.setTreePath("/0/1/3/");
@@ -115,8 +125,11 @@ public class ProfitServiceImplTest {
         when(userMapper.selectById(parentStore.getId())).thenReturn(parentStore, parentStore);
         when(userMapper.selectById(ancestorPartner.getId()))
                 .thenReturn(ancestorPartner, ancestorPartner, ancestorPartner, ancestorPartner);
+        when(policyConfigService.getConfigValue("STORE_DIRECT_REWARD_START_COUNT")).thenReturn(new BigDecimal("2"));
         when(policyConfigService.getConfigValue("STORE_REWARD_DIRECT")).thenReturn(new BigDecimal("9000.00"));
-        when(policyConfigService.getConfigValue("REWARD_INDIRECT")).thenReturn(new BigDecimal("3000.00"));
+        when(policyConfigService.getConfigValue("STORE_INDIRECT_REWARD_ENABLED")).thenReturn(BigDecimal.ZERO);
+        when(policyConfigService.getConfigValue("PARTNER_TEAM_MANAGEMENT_START_COUNT")).thenReturn(new BigDecimal("2"));
+        when(policyConfigService.getConfigValue("PARTNER_TEAM_MANAGEMENT_END_COUNT")).thenReturn(new BigDecimal("100"));
         when(policyConfigService.getConfigValue("PARTNER_TEAM_MANAGEMENT")).thenReturn(new BigDecimal("1000.00"));
         when(lockService.tryLock(anyString(), anyLong(), anyLong())).thenReturn(true);
         when(userMapper.updateById(any(User.class))).thenReturn(1);
@@ -126,18 +139,38 @@ public class ProfitServiceImplTest {
         assertEquals(UserRole.STORE.getCode(), newUser.getRole());
         assertEquals(new BigDecimal("9000.00"), parentStore.getBalance());
         assertEquals(new BigDecimal("9000.00"), parentStore.getTotalEarnings());
-        assertEquals(new BigDecimal("4000.00"), ancestorPartner.getBalance());
-        assertEquals(new BigDecimal("4000.00"), ancestorPartner.getTotalEarnings());
+        assertEquals(new BigDecimal("1000.00"), ancestorPartner.getBalance());
+        assertEquals(new BigDecimal("1000.00"), ancestorPartner.getTotalEarnings());
 
         ArgumentCaptor<ProfitLog> logCaptor = ArgumentCaptor.forClass(ProfitLog.class);
-        verify(profitLogMapper, times(3)).insert(logCaptor.capture());
+        verify(profitLogMapper, times(2)).insert(logCaptor.capture());
         List<ProfitLog> logs = logCaptor.getAllValues();
         assertEquals(ProfitType.DIRECT_STORE.getCode(), logs.get(0).getType());
         assertEquals(new BigDecimal("9000.00"), logs.get(0).getAmount());
-        assertEquals(ProfitType.INDIRECT_STORE.getCode(), logs.get(1).getType());
-        assertEquals(new BigDecimal("3000.00"), logs.get(1).getAmount());
-        assertEquals(ProfitType.TEAM_MANAGEMENT.getCode(), logs.get(2).getType());
-        assertEquals(new BigDecimal("1000.00"), logs.get(2).getAmount());
+        assertEquals(ProfitType.TEAM_MANAGEMENT.getCode(), logs.get(1).getType());
+        assertEquals(new BigDecimal("1000.00"), logs.get(1).getAmount());
+    }
+
+    @Test
+    void processJoinStoreProfitSkipsFirstDirectStoreReward() {
+        User parentStore = user(3L, UserRole.STORE, "0.00", "0.00");
+        parentStore.setStoreCount(0);
+        User newUser = user(10L, UserRole.MEMBER, "0.00", "0.00");
+        newUser.setParentId(parentStore.getId());
+        newUser.setTreePath("/0/3/");
+        Order order = order("ORD-STORE-FIRST-DIRECT", newUser.getId(), OrderStatus.PAID.getCode());
+
+        when(userMapper.selectById(newUser.getId())).thenReturn(newUser);
+        when(userMapper.selectById(parentStore.getId())).thenReturn(parentStore, parentStore);
+        when(policyConfigService.getConfigValue("STORE_DIRECT_REWARD_START_COUNT")).thenReturn(new BigDecimal("2"));
+        when(policyConfigService.getConfigValue("STORE_INDIRECT_REWARD_ENABLED")).thenReturn(BigDecimal.ZERO);
+        when(userMapper.updateById(any(User.class))).thenReturn(1);
+
+        profitService.processJoinStoreProfit(order);
+
+        assertEquals(1, parentStore.getStoreCount());
+        assertEquals(new BigDecimal("0.00"), parentStore.getBalance());
+        verify(profitLogMapper, never()).insert(any());
     }
 
     @Test
@@ -158,6 +191,7 @@ public class ProfitServiceImplTest {
     @Test
     void processJoinStoreProfitRewardsAgentParentAndSkipsBlankTreePath() {
         User parentAgent = user(2L, UserRole.AGENT, "10.00", "20.00");
+        parentAgent.setStoreCount(1);
         User newUser = user(10L, UserRole.MEMBER, "0.00", "0.00");
         newUser.setParentId(parentAgent.getId());
         newUser.setTreePath(" ");
@@ -165,7 +199,9 @@ public class ProfitServiceImplTest {
 
         when(userMapper.selectById(newUser.getId())).thenReturn(newUser);
         when(userMapper.selectById(parentAgent.getId())).thenReturn(parentAgent, parentAgent);
+        when(policyConfigService.getConfigValue("STORE_DIRECT_REWARD_START_COUNT")).thenReturn(new BigDecimal("2"));
         when(policyConfigService.getConfigValue("AGENT_REWARD_DIRECT")).thenReturn(new BigDecimal("7000.00"));
+        when(policyConfigService.getConfigValue("STORE_INDIRECT_REWARD_ENABLED")).thenReturn(BigDecimal.ZERO);
         when(lockService.tryLock(anyString(), anyLong(), anyLong())).thenReturn(true);
         when(userMapper.updateById(any(User.class))).thenReturn(1);
 
@@ -179,6 +215,7 @@ public class ProfitServiceImplTest {
     @Test
     void processJoinStoreProfitSkipsShortTreePathAndZeroDirectReward() {
         User parentStore = user(3L, UserRole.STORE, "0.00", "0.00");
+        parentStore.setStoreCount(1);
         User newUser = user(10L, UserRole.MEMBER, "0.00", "0.00");
         newUser.setParentId(parentStore.getId());
         newUser.setTreePath("/");
@@ -186,7 +223,9 @@ public class ProfitServiceImplTest {
 
         when(userMapper.selectById(newUser.getId())).thenReturn(newUser);
         when(userMapper.selectById(parentStore.getId())).thenReturn(parentStore);
+        when(policyConfigService.getConfigValue("STORE_DIRECT_REWARD_START_COUNT")).thenReturn(new BigDecimal("2"));
         when(policyConfigService.getConfigValue("STORE_REWARD_DIRECT")).thenReturn(BigDecimal.ZERO);
+        when(policyConfigService.getConfigValue("STORE_INDIRECT_REWARD_ENABLED")).thenReturn(BigDecimal.ZERO);
 
         profitService.processJoinStoreProfit(order);
 
@@ -197,6 +236,7 @@ public class ProfitServiceImplTest {
     @Test
     void processJoinStoreProfitIgnoresInvalidAncestorPath() {
         User parentStore = user(3L, UserRole.STORE, "0.00", "0.00");
+        parentStore.setStoreCount(1);
         User newUser = user(10L, UserRole.MEMBER, "0.00", "0.00");
         newUser.setParentId(parentStore.getId());
         newUser.setTreePath("/abc/3/");
@@ -204,7 +244,9 @@ public class ProfitServiceImplTest {
 
         when(userMapper.selectById(newUser.getId())).thenReturn(newUser);
         when(userMapper.selectById(parentStore.getId())).thenReturn(parentStore);
+        when(policyConfigService.getConfigValue("STORE_DIRECT_REWARD_START_COUNT")).thenReturn(new BigDecimal("2"));
         when(policyConfigService.getConfigValue("STORE_REWARD_DIRECT")).thenReturn(BigDecimal.ZERO);
+        when(policyConfigService.getConfigValue("STORE_INDIRECT_REWARD_ENABLED")).thenReturn(BigDecimal.ZERO);
 
         profitService.processJoinStoreProfit(order);
 
@@ -394,6 +436,7 @@ public class ProfitServiceImplTest {
         when(lockService.tryLock(anyString(), anyLong(), anyLong())).thenReturn(true);
         when(userMapper.selectById(partner.getId())).thenReturn(partner);
         when(userMapper.updateById(any(User.class))).thenReturn(1);
+        when(userMapper.update(any(), any(UpdateWrapper.class))).thenReturn(1);
 
         profitService.processPartnerRecruitAgentProfit(partner, newAgent);
 
@@ -401,6 +444,7 @@ public class ProfitServiceImplTest {
         assertEquals(new BigDecimal("39800.00"), partner.getBalance());
         verify(policyConfigService, never()).getConfigValue("HEADQUARTER_SUPPORT_FEE");
         verify(profitLogMapper).insert(any(ProfitLog.class));
+        verify(userMapper).update(any(), any(UpdateWrapper.class));
     }
 
     @Test
@@ -411,6 +455,7 @@ public class ProfitServiceImplTest {
 
         when(policyConfigService.getConfigValue("PARTNER_MANAGE_FEE")).thenReturn(new BigDecimal("39800.00"));
         when(lockService.tryLock(anyString(), anyLong(), anyLong())).thenReturn(false);
+        when(userMapper.update(any(), any(UpdateWrapper.class))).thenReturn(1);
 
         profitService.processPartnerRecruitAgentProfit(partner, newAgent);
 
@@ -418,7 +463,7 @@ public class ProfitServiceImplTest {
         assertEquals(new BigDecimal("0.00"), partner.getBalance());
         verify(profitLogMapper, never()).insert(any());
         verify(lockService).unlock(anyString());
-        verify(userMapper).updateById(partner);
+        verify(userMapper).update(any(), any(UpdateWrapper.class));
     }
 
     @Test
@@ -443,6 +488,7 @@ public class ProfitServiceImplTest {
         // balance update flow uses selectById for fetch in addBalance
         when(userMapper.selectById(partner.getId())).thenReturn(partner, partner, partner);
         when(userMapper.updateById(any(User.class))).thenReturn(1);
+        when(userMapper.update(any(), any(UpdateWrapper.class))).thenReturn(1);
 
         // execute
         profitService.processPartnerRecruitAgentProfit(partner, newAgent);

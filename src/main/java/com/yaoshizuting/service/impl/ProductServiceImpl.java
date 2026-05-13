@@ -37,6 +37,7 @@ public class ProductServiceImpl implements ProductService {
     @Transactional(rollbackFor = Exception.class)
     public Product createProduct(ProductUpsertRequest request) {
         validateProductType(request.getProductType());
+        validateStatus(request.getStatus());
         ensureProductCodeUnique(request.getProductCode(), null);
 
         Product product = new Product();
@@ -50,6 +51,7 @@ public class ProductServiceImpl implements ProductService {
     @Transactional(rollbackFor = Exception.class)
     public Product updateProduct(Long productId, ProductUpsertRequest request) {
         validateProductType(request.getProductType());
+        validateStatus(request.getStatus());
         Product product = productMapper.selectById(productId);
         if (product == null) {
             throw new BusinessException(404, "商品不存在");
@@ -96,6 +98,12 @@ public class ProductServiceImpl implements ProductService {
     private void validateProductType(Integer productType) {
         if (productType == null || productType < 1 || productType > 3) {
             throw new BusinessException(400, "商品类型无效");
+        }
+    }
+
+    private void validateStatus(Integer status) {
+        if (status != null && status != 0 && status != 1) {
+            throw new BusinessException(400, "商品状态无效");
         }
     }
 

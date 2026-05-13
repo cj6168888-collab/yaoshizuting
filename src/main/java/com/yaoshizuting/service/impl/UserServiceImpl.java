@@ -2,6 +2,8 @@ package com.yaoshizuting.service.impl;
 
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.crypto.digest.BCrypt;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.yaoshizuting.dto.LoginRequest;
 import com.yaoshizuting.dto.LoginResponse;
@@ -9,6 +11,7 @@ import com.yaoshizuting.entity.User;
 import com.yaoshizuting.enums.UserRole;
 import com.yaoshizuting.exception.BusinessException;
 import com.yaoshizuting.mapper.UserMapper;
+import com.yaoshizuting.service.TeamService;
 import com.yaoshizuting.service.UserService;
 import com.yaoshizuting.utils.JwtUtils;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +32,8 @@ public class UserServiceImpl implements UserService {
     private final UserMapper userMapper;
     private final JwtUtils jwtUtils;
     private final RedisTemplate<String, Object> redisTemplate;
+    private final TeamService teamService;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     private static final String SMS_CODE_PREFIX = "sms:code:";
     private static final long SMS_CODE_EXPIRE = 300;
@@ -56,14 +61,14 @@ public class UserServiceImpl implements UserService {
 
         String bindKey = "invite:bind:" + mobile;
         Object bindData = redisTemplate.opsForValue().get(bindKey);
+        Map<String, Object> lockedBindData = parseBindData(bindData);
 
         if (user == null) {
             String inviteCode = request.getInviteCode();
-            if (inviteCode == null && bindData instanceof Map) {
-                Map<String, Object> data = (Map<String, Object>) bindData;
-                Object lockedParentId = data.get("parentId");
+            if (inviteCode == null && lockedBindData != null) {
+                Object lockedParentId = lockedBindData.get("parentId");
                 if (lockedParentId != null) {
-                    User lockedParent = userMapper.selectById(((Number) lockedParentId).longValue());
+                    User lockedParent = userMapper.selectById(parseLong(lockedParentId));
                     if (lockedParent != null) {
                         inviteCode = lockedParent.getMobile();
                         log.info("从Redis锁定关系获取上级: mobile={}, parentMobile={}", mobile, inviteCode);
@@ -71,11 +76,10 @@ public class UserServiceImpl implements UserService {
                 }
             }
             user = createNewUser(mobile, inviteCode);
-        } else if (bindData instanceof Map && user.getParentId() == 0) {
-            Map<String, Object> data = (Map<String, Object>) bindData;
-            Object lockedParentId = data.get("parentId");
+        } else if (lockedBindData != null && user.getParentId() == 0) {
+            Object lockedParentId = lockedBindData.get("parentId");
             if (lockedParentId != null) {
-                Long parentId = ((Number) lockedParentId).longValue();
+                Long parentId = parseLong(lockedParentId);
                 if (parentId > 0 && !parentId.equals(user.getId())) {
                     user.setParentId(parentId);
                     User lockedParent = userMapper.selectById(parentId);
@@ -83,6 +87,7 @@ public class UserServiceImpl implements UserService {
                         String parentPath = lockedParent.getTreePath() != null ? lockedParent.getTreePath() : "/0/";
                         user.setTreePath(parentPath + parentId + "/");
                         userMapper.updateById(user);
+                        teamService.evictTeamTreeCaches(user);
                         log.info("扫码绑定上级: userId={}, parentId={}", user.getId(), parentId);
                     }
                 }
@@ -143,9 +148,37 @@ public class UserServiceImpl implements UserService {
         user.setStatus(1);
 
         userMapper.insert(user);
+        teamService.evictTeamTreeCaches(user);
 
         log.info("创建新用户: mobile={}, parentId={}", mobile, parentId);
         return user;
+    }
+
+    private Map<String, Object> parseBindData(Object bindData) {
+        if (bindData instanceof Map<?, ?> map) {
+            return (Map<String, Object>) map;
+        }
+        if (bindData instanceof String text && StrUtil.isNotBlank(text)) {
+            try {
+                return objectMapper.readValue(text, new TypeReference<Map<String, Object>>() {});
+            } catch (Exception e) {
+                log.warn("解析锁定上级关系失败: {}", e.getMessage());
+            }
+        }
+        return null;
+    }
+
+    private Long parseLong(Object value) {
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        if (value instanceof String text && StrUtil.isNotBlank(text)) {
+            try {
+                return Long.parseLong(text.trim());
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        return 0L;
     }
 
     @Override

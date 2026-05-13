@@ -1,12 +1,15 @@
 package com.yaoshizuting.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.yaoshizuting.entity.ProfitLog;
 import com.yaoshizuting.entity.User;
+import com.yaoshizuting.mapper.OrderMapper;
 import com.yaoshizuting.mapper.ProfitLogMapper;
 import com.yaoshizuting.mapper.UserMapper;
 import com.yaoshizuting.mapper.WithdrawalMapper;
 import com.yaoshizuting.service.DistributedLockService;
 import com.yaoshizuting.service.PolicyConfigService;
+import com.yaoshizuting.service.TeamService;
 import com.yaoshizuting.service.ProfitService;
 import com.yaoshizuting.enums.ProfitType;
 import com.yaoshizuting.enums.UserRole;
@@ -31,6 +34,9 @@ public class ProfitServiceImplIdempotentAgentTest {
     private UserMapper userMapper;
 
     @Mock
+    private OrderMapper orderMapper;
+
+    @Mock
     private ProfitLogMapper profitLogMapper;
 
     @Mock
@@ -42,12 +48,15 @@ public class ProfitServiceImplIdempotentAgentTest {
     @Mock
     private WithdrawalMapper withdrawalMapper;
 
+    @Mock
+    private TeamService teamService;
+
     @InjectMocks
     private ProfitServiceImpl profitService;
 
     @BeforeEach
     void setUp() {
-        profitService = new ProfitServiceImpl(userMapper, profitLogMapper, policyConfigService, lockService, withdrawalMapper);
+        profitService = new ProfitServiceImpl(userMapper, orderMapper, profitLogMapper, policyConfigService, lockService, withdrawalMapper, teamService);
     }
 
     @Test
@@ -78,6 +87,7 @@ public class ProfitServiceImplIdempotentAgentTest {
         when(lockService.tryLock(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyLong()))
                 .thenReturn(true);
         when(userMapper.updateById(any(User.class))).thenReturn(1);
+        when(userMapper.update(any(), any(UpdateWrapper.class))).thenReturn(1);
         // First call returns null (no existing log), second call returns a non-null (existing log)
         when(profitLogMapper.selectByUniqueKey(order.getOrderSn(), ProfitType.AGENT_MANAGE.getCode(), partner.getId()))
                 .thenReturn(null).thenReturn(new ProfitLog());

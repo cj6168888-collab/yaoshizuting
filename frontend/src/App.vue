@@ -125,11 +125,15 @@ const policyGroups = [
       { key: 'STORE_REWARD_DIRECT', label: '店主直推店铺奖励', description: '店主直接推荐店铺奖励' },
       { key: 'AGENT_REWARD_DIRECT', label: '代理直推店铺奖励', description: '代理直接推荐店铺奖励' },
       { key: 'PARTNER_REWARD_DIRECT', label: '合伙人直推店铺奖励', description: '合伙人直接推荐店铺奖励' },
-      { key: 'REWARD_INDIRECT', label: '间推奖励', description: '间接推荐奖励' },
+      { key: 'STORE_DIRECT_REWARD_START_COUNT', label: '直推起奖店铺数', description: '直推第几家店铺开始奖励', prefix: '', suffix: '家', step: 1 },
+      { key: 'STORE_INDIRECT_REWARD_ENABLED', label: '启用间推奖励', description: '是否启用间推店铺奖励：0否，1是', prefix: '', suffix: '0/1', step: 1 },
+      { key: 'REWARD_INDIRECT', label: '间推奖励金额', description: '间接推荐店铺奖励金额' },
       { key: 'AGENT_REWARD_DIRECT_AGENT', label: '直推代理奖励', description: '店主或代理直接推荐代理奖励' },
       { key: 'PARTNER_MANAGE_FEE', label: '代理管理培训费', description: '合伙人招募代理的管理培训费' },
       { key: 'HEADQUARTER_SUPPORT_FEE', label: '总部培训支持费', description: '合伙人第11名起的总部培训支持费' },
-      { key: 'PARTNER_TEAM_MANAGEMENT', label: '团队管理津贴', description: '合伙人团队管理津贴' }
+      { key: 'PARTNER_TEAM_MANAGEMENT', label: '团队管理津贴', description: '合伙人团队管理津贴' },
+      { key: 'PARTNER_TEAM_MANAGEMENT_START_COUNT', label: '管理津贴起始数', description: '团队第几家店铺开始发放管理津贴', prefix: '', suffix: '家', step: 1 },
+      { key: 'PARTNER_TEAM_MANAGEMENT_END_COUNT', label: '管理津贴结束数', description: '团队管理津贴发放到第几家店铺', prefix: '', suffix: '家', step: 1 }
     ]
   },
   {
@@ -142,6 +146,8 @@ const policyGroups = [
     ]
   }
 ];
+
+const policyWarnings = computed(() => evaluatePolicyWarnings(policies.value));
 
 function emptyProductForm() {
   return {
@@ -351,7 +357,7 @@ async function loadPublicProducts() {
 
 async function createJoinOrder(type) {
   const endpoints = {
-    store: { url: '/join/store', payload: { payMethod: 'WECHAT' }, label: '店铺加盟订单' },
+    store: { url: '/join/store', payload: { payMethod: 1 }, label: '店铺加盟订单' },
     agent: { url: '/join/agent', payload: {}, label: '代理加盟订单' },
     partner: { url: '/join/partner', payload: {}, label: '合伙人加盟订单' }
   };
@@ -417,24 +423,77 @@ async function loadPolicies() {
 async function savePolicy(item) {
   const value = policies.value[item.key];
   if (value === '' || value === null || value === undefined || Number(value) < 0) {
-    policyMessage.value = '请输入有效的配置金额';
+    policyMessage.value = '请输入有效的配置值';
     return;
   }
 
   policySaving.value = true;
   policyMessage.value = '';
   try {
-    await api.put(
+    const data = unwrap(await api.put(
       '/admin/policy',
       { configKey: item.key, configValue: value, description: item.description },
       { headers: authHeaders() }
-    );
-    policyMessage.value = `${item.label} 已更新`;
+    ));
+    policyMessage.value = data?.warnings?.length
+      ? `${item.label} 已更新，存在 ${data.warnings.length} 条风险提示`
+      : `${item.label} 已更新`;
   } catch (error) {
     policyMessage.value = errorMessage(error, '配置更新失败');
   } finally {
     policySaving.value = false;
   }
+}
+
+function policyNumber(values, key, fallback = 0) {
+  const value = Number(values[key]);
+  return Number.isFinite(value) ? value : fallback;
+}
+
+function evaluatePolicyWarnings(values) {
+  const warnings = [];
+  const storeJoinFee = policyNumber(values, 'STORE_JOIN_FEE', 13960);
+  const maxDirectStoreReward = Math.max(
+    policyNumber(values, 'STORE_REWARD_DIRECT', 9000),
+    policyNumber(values, 'AGENT_REWARD_DIRECT', 9000),
+    policyNumber(values, 'PARTNER_REWARD_DIRECT', 9000)
+  );
+  const indirectReward = policyNumber(values, 'STORE_INDIRECT_REWARD_ENABLED', 0) > 0
+    ? policyNumber(values, 'REWARD_INDIRECT', 0)
+    : 0;
+  const teamManagement = policyNumber(values, 'PARTNER_TEAM_MANAGEMENT', 998);
+  const storeRewardTotal = maxDirectStoreReward + indirectReward + teamManagement;
+  if (storeRewardTotal > storeJoinFee) {
+    warnings.push(`店铺加盟单笔最高分润 ¥${formatMoney(storeRewardTotal)} 已超过店铺加盟费 ¥${formatMoney(storeJoinFee)}`);
+  }
+
+  const directStart = policyNumber(values, 'STORE_DIRECT_REWARD_START_COUNT', 2);
+  if (directStart < 1) {
+    warnings.push('直推起奖店铺数小于 1，会导致奖励门槛无效');
+  }
+
+  const teamStart = policyNumber(values, 'PARTNER_TEAM_MANAGEMENT_START_COUNT', 2);
+  const teamEnd = policyNumber(values, 'PARTNER_TEAM_MANAGEMENT_END_COUNT', 100);
+  if (teamStart < 1 || teamEnd < teamStart) {
+    warnings.push('团队管理津贴起止店铺数不合理，请确保起始值大于等于 1 且不超过结束值');
+  }
+
+  const agentJoinFee = policyNumber(values, 'AGENT_JOIN_FEE', 39800);
+  const agentReward = Math.max(
+    policyNumber(values, 'AGENT_REWARD_DIRECT_AGENT', 16000),
+    policyNumber(values, 'PARTNER_MANAGE_FEE', 39800)
+  );
+  if (agentReward > agentJoinFee) {
+    warnings.push(`代理加盟单笔最高分润 ¥${formatMoney(agentReward)} 已超过代理加盟费 ¥${formatMoney(agentJoinFee)}`);
+  }
+
+  const partnerJoinFee = policyNumber(values, 'PARTNER_JOIN_FEE', 99800);
+  const partnerReward = policyNumber(values, 'PARTNER_REWARD_DIRECT_PARTNER', 40000);
+  if (partnerReward > partnerJoinFee) {
+    warnings.push(`合伙人加盟直推奖励 ¥${formatMoney(partnerReward)} 已超过合伙人加盟费 ¥${formatMoney(partnerJoinFee)}`);
+  }
+
+  return warnings;
 }
 
 async function loadInviteQr() {
@@ -1343,14 +1402,19 @@ onUnmounted(clearCodeTimer);
             <p>管理加盟费用与分润政策</p>
           </div>
           <div v-if="policyMessage" class="bind-feedback admin-message" :class="{ ok: !isFailureMessage(policyMessage), fail: isFailureMessage(policyMessage) }">{{ policyMessage }}</div>
+          <div v-if="policyWarnings.length" class="policy-warning-panel">
+            <strong>配置风险提示</strong>
+            <p v-for="warning in policyWarnings" :key="warning">{{ warning }}</p>
+          </div>
           <div v-for="group in policyGroups" :key="group.title" class="panel-card">
             <div class="pc-header"><h3>{{ group.title }}</h3></div>
             <div class="config-grid editable">
               <div v-for="item in group.items" :key="item.key" class="cfg-item editable">
                 <label :for="item.key">{{ item.label }}</label>
                 <div class="cfg-edit-row">
-                  <span class="money-prefix">¥</span>
-                  <input :id="item.key" v-model="policies[item.key]" type="number" min="0" step="0.01" />
+                  <span v-if="(item.prefix ?? '¥')" class="money-prefix">{{ item.prefix ?? '¥' }}</span>
+                  <input :id="item.key" v-model="policies[item.key]" type="number" min="0" :step="item.step || 0.01" />
+                  <span v-if="item.suffix" class="config-suffix">{{ item.suffix }}</span>
                   <button class="mini-save" @click="savePolicy(item)" :disabled="policySaving">保存</button>
                 </div>
               </div>
@@ -1546,8 +1610,12 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--p
 .cfg-item.editable label { display: block; margin-bottom: 10px; font-weight: 600; color: var(--text2); }
 .cfg-edit-row { display: flex; align-items: center; gap: 8px; }
 .money-prefix { color: var(--pri); font-weight: 700; }
+.config-suffix { color: var(--text3); font-size: 12px; white-space: nowrap; }
 .cfg-edit-row input { flex: 1; min-width: 0; height: 38px; padding: 0 10px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 14px; background: #fff; }
 .mini-save { height: 38px; padding: 0 14px; border: none; border-radius: 8px; background: var(--pri); color: #fff; font-size: 13px; font-weight: 600; }
+.policy-warning-panel { margin-bottom: 16px; padding: 14px 16px; border: 1px solid #ffd591; border-radius: 8px; background: #fff7e6; color: #8a4b00; }
+.policy-warning-panel strong { display: block; margin-bottom: 6px; font-size: 14px; }
+.policy-warning-panel p { margin: 4px 0; font-size: 13px; line-height: 1.5; }
 
 .empty-box { text-align: center; padding: 48px 24px; color: var(--text3); font-size: 14px; }
 .brand-empty { display: flex; flex-direction: column; align-items: center; gap: 12px; }

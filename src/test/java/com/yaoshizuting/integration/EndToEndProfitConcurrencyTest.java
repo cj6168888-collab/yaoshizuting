@@ -61,7 +61,9 @@ public class EndToEndProfitConcurrencyTest {
         TestMode.setMode(TestMode.Mode.CONCURRENT);
 
         policyConfigService.updateConfig("PARTNER_REWARD_DIRECT", new BigDecimal("9000"), "partner direct store reward");
-        policyConfigService.updateConfig("REWARD_INDIRECT", new BigDecimal("6000"), "indirect store reward");
+        policyConfigService.updateConfig("STORE_DIRECT_REWARD_START_COUNT", new BigDecimal("2"), "direct store reward starts from second store");
+        policyConfigService.updateConfig("STORE_INDIRECT_REWARD_ENABLED", BigDecimal.ZERO, "disable indirect store reward");
+        policyConfigService.updateConfig("REWARD_INDIRECT", BigDecimal.ZERO, "indirect store reward");
         policyConfigService.updateConfig("PARTNER_TEAM_MANAGEMENT", new BigDecimal("998"), "team management fee");
 
         User partner = new User();
@@ -117,11 +119,14 @@ public class EndToEndProfitConcurrencyTest {
     @Test
     void endToEnd_CrossOrder_SameReceiverIdempotent() throws InterruptedException {
         policyConfigService.updateConfig("PARTNER_REWARD_DIRECT", new BigDecimal("9000"), "partner direct store reward");
-        policyConfigService.updateConfig("REWARD_INDIRECT", new BigDecimal("6000"), "indirect store reward");
+        policyConfigService.updateConfig("STORE_DIRECT_REWARD_START_COUNT", new BigDecimal("2"), "direct store reward starts from second store");
+        policyConfigService.updateConfig("STORE_INDIRECT_REWARD_ENABLED", BigDecimal.ZERO, "disable indirect store reward");
+        policyConfigService.updateConfig("REWARD_INDIRECT", BigDecimal.ZERO, "indirect store reward");
 
         User partner = new User();
         partner.setRole(UserRole.PARTNER.getCode());
         partner.setMobile("13900000121");
+        partner.setStoreCount(1);
         userMapper.insert(partner);
         Long partnerId = partner.getId();
 

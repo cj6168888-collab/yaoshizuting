@@ -9,16 +9,20 @@ import com.yaoshizuting.enums.OrderStatus;
 import com.yaoshizuting.enums.ProfitType;
 import com.yaoshizuting.enums.UserRole;
 import com.yaoshizuting.exception.BusinessException;
+import com.yaoshizuting.mapper.OrderMapper;
 import com.yaoshizuting.mapper.ProfitLogMapper;
 import com.yaoshizuting.mapper.UserMapper;
 import com.yaoshizuting.mapper.WithdrawalMapper;
 import com.yaoshizuting.service.DistributedLockService;
 import com.yaoshizuting.service.PolicyConfigService;
 import com.yaoshizuting.service.ProfitService;
+import com.yaoshizuting.service.TeamService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -32,10 +36,12 @@ import java.util.List;
 public class ProfitServiceImpl implements ProfitService {
 
     private final UserMapper userMapper;
+    private final OrderMapper orderMapper;
     private final ProfitLogMapper profitLogMapper;
     private final PolicyConfigService policyConfigService;
     private final DistributedLockService lockService;
     private final WithdrawalMapper withdrawalMapper;
+    private final TeamService teamService;
 
     private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
@@ -47,6 +53,10 @@ public class ProfitServiceImpl implements ProfitService {
             return;
         }
 
+        if (!claimPaidOrder(order)) {
+            return;
+        }
+
         User newUser = userMapper.selectById(order.getUserId());
         if (newUser == null) {
             throw new BusinessException("用户不存在");
@@ -54,12 +64,14 @@ public class ProfitServiceImpl implements ProfitService {
 
         newUser.setRole(UserRole.STORE.getCode());
         userMapper.updateById(newUser);
+        teamService.evictTeamTreeCaches(newUser);
 
         if (newUser.getParentId() != null && newUser.getParentId() > 0) {
             incrementStoreCounts(newUser);
             distributeStoreJoinProfit(order, newUser);
         }
 
+        completeOrder(order);
         log.info("处理店铺加盟分润完成: orderSn={}, userId={}", order.getOrderSn(), order.getUserId());
     }
 
@@ -69,7 +81,7 @@ public class ProfitServiceImpl implements ProfitService {
             return;
         }
 
-        BigDecimal directReward = getDirectStoreReward(parent);
+        BigDecimal directReward = isDirectStoreRewardEligible(parent) ? getDirectStoreReward(parent) : BigDecimal.ZERO;
         
         if (directReward.compareTo(BigDecimal.ZERO) > 0) {
             if (createProfitLog(order.getOrderSn(), parent.getId(), newUser.getId(), directReward,
@@ -78,8 +90,20 @@ public class ProfitServiceImpl implements ProfitService {
             }
         }
 
-        distributeIndirectReward(order.getOrderSn(), newUser);
+        if (isIndirectStoreRewardEnabled()) {
+            distributeIndirectReward(order.getOrderSn(), newUser);
+        }
         distributeTeamManagementFee(order.getOrderSn(), newUser);
+    }
+
+    private boolean isDirectStoreRewardEligible(User parent) {
+        int storeCount = parent.getStoreCount() != null ? parent.getStoreCount() : 0;
+        int startCount = getConfigInt("STORE_DIRECT_REWARD_START_COUNT", 2);
+        return storeCount >= startCount;
+    }
+
+    private boolean isIndirectStoreRewardEnabled() {
+        return getConfigInt("STORE_INDIRECT_REWARD_ENABLED", 0) > 0;
     }
 
     private BigDecimal getDirectStoreReward(User parent) {
@@ -140,8 +164,10 @@ public class ProfitServiceImpl implements ProfitService {
                 
                 if (partner != null && partner.getRole() == UserRole.PARTNER.getCode()) {
                     Integer storeCount = partner.getStoreCount() != null ? partner.getStoreCount() : 0;
+                    int startCount = getConfigInt("PARTNER_TEAM_MANAGEMENT_START_COUNT", 2);
+                    int endCount = getConfigInt("PARTNER_TEAM_MANAGEMENT_END_COUNT", 100);
                     
-                    if (storeCount >= 1 && storeCount <= 100) {
+                    if (storeCount >= startCount && storeCount <= endCount) {
                         BigDecimal managementFee = policyConfigService.getConfigValue("PARTNER_TEAM_MANAGEMENT");
                         if (createProfitLog(orderSn, partnerId, newUser.getId(), managementFee,
                                 ProfitType.TEAM_MANAGEMENT.getCode(), "团队管理津贴")) {
@@ -163,6 +189,10 @@ public class ProfitServiceImpl implements ProfitService {
             return;
         }
 
+        if (!claimPaidOrder(order)) {
+            return;
+        }
+
         User newAgent = userMapper.selectById(order.getUserId());
         if (newAgent == null) {
             throw new BusinessException("用户不存在");
@@ -170,11 +200,13 @@ public class ProfitServiceImpl implements ProfitService {
 
         newAgent.setRole(UserRole.AGENT.getCode());
         userMapper.updateById(newAgent);
+        teamService.evictTeamTreeCaches(newAgent);
 
         if (newAgent.getParentId() != null && newAgent.getParentId() > 0) {
             distributeAgentJoinProfit(order, newAgent);
         }
 
+        completeOrder(order);
         log.info("处理代理加盟分润完成: orderSn={}, userId={}", order.getOrderSn(), order.getUserId());
     }
 
@@ -205,6 +237,10 @@ public class ProfitServiceImpl implements ProfitService {
             return;
         }
 
+        if (!claimPaidOrder(order)) {
+            return;
+        }
+
         User newPartner = userMapper.selectById(order.getUserId());
         if (newPartner == null) {
             throw new BusinessException("用户不存在");
@@ -212,11 +248,13 @@ public class ProfitServiceImpl implements ProfitService {
 
         newPartner.setRole(UserRole.PARTNER.getCode());
         userMapper.updateById(newPartner);
+        teamService.evictTeamTreeCaches(newPartner);
 
         if (newPartner.getParentId() != null && newPartner.getParentId() > 0) {
             distributePartnerJoinProfit(order, newPartner);
         }
 
+        completeOrder(order);
         log.info("处理合伙人加盟分润完成: orderSn={}, userId={}", order.getOrderSn(), order.getUserId());
     }
 
@@ -264,10 +302,24 @@ public class ProfitServiceImpl implements ProfitService {
             }
         }
 
-        partner.setAgentCount(currentCount + 1);
-        userMapper.updateById(partner);
+        incrementAgentCount(partner, currentCount);
 
         log.info("处理合伙人招募代理分润: partnerId={}, agentId={}, count={}", partner.getId(), newAgent.getId(), currentCount + 1);
+    }
+
+    private void incrementAgentCount(User partner, int currentCount) {
+        int updated = userMapper.update(null, new UpdateWrapper<User>()
+                .setSql("agent_count = COALESCE(agent_count, 0) + 1")
+                .set("update_time", LocalDateTime.now())
+                .eq("id", partner.getId())
+                .eq("deleted", 0));
+
+        if (updated > 0) {
+            partner.setAgentCount(currentCount + 1);
+            return;
+        }
+
+        log.warn("合伙人代理数更新失败: partnerId={}", partner.getId());
     }
 
     private boolean createProfitLog(String orderSnKey, Long receiverId, Long contributorId, BigDecimal amount,
@@ -334,6 +386,42 @@ public class ProfitServiceImpl implements ProfitService {
         }
         
         log.error("余额更新失败，超过最大重试次数: userId={}", userId);
+    }
+
+    private boolean claimPaidOrder(Order order) {
+        if (order.getId() == null) {
+            return true;
+        }
+
+        int updated = orderMapper.update(null, new LambdaUpdateWrapper<Order>()
+                .set(Order::getStatus, OrderStatus.PROCESSING.getCode())
+                .set(Order::getUpdateTime, LocalDateTime.now())
+                .eq(Order::getId, order.getId())
+                .eq(Order::getStatus, OrderStatus.PAID.getCode()));
+        if (updated <= 0) {
+            log.warn("订单已被处理或正在处理，跳过分润: orderSn={}", order.getOrderSn());
+            return false;
+        }
+        order.setStatus(OrderStatus.PROCESSING.getCode());
+        return true;
+    }
+
+    private void completeOrder(Order order) {
+        if (order.getId() == null) {
+            order.setStatus(OrderStatus.COMPLETED.getCode());
+            return;
+        }
+
+        orderMapper.update(null, new LambdaUpdateWrapper<Order>()
+                .set(Order::getStatus, OrderStatus.COMPLETED.getCode())
+                .set(Order::getUpdateTime, LocalDateTime.now())
+                .eq(Order::getId, order.getId()));
+        order.setStatus(OrderStatus.COMPLETED.getCode());
+    }
+
+    private int getConfigInt(String key, int defaultValue) {
+        BigDecimal value = policyConfigService.getConfigValue(key);
+        return value == null ? defaultValue : value.intValue();
     }
 
     @Override

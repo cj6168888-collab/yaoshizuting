@@ -211,4 +211,18 @@ class TeamServiceImplTest {
         assertEquals(2L, result.get(0).getUserId());
         verify(valueOperations, never()).set(any(), any(), eq(5L), eq(TimeUnit.MINUTES));
     }
+
+    @Test
+    void evictTeamTreeCachesDeletesUserParentAndAncestorCaches() {
+        User user = new User();
+        user.setId(30L);
+        user.setParentId(20L);
+        user.setTreePath("/0/10/20/");
+
+        teamService.evictTeamTreeCaches(user);
+
+        verify(redisTemplate).delete("team:tree:30");
+        verify(redisTemplate).delete("team:tree:20");
+        verify(redisTemplate).delete("team:tree:10");
+    }
 }

@@ -62,7 +62,8 @@ class AdminPolicyControllerTest {
                         "description", "后台政策测试配置"))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(200))
-                .andExpect(jsonPath("$.data").value("配置更新成功"));
+                .andExpect(jsonPath("$.data.message").value("配置更新成功"))
+                .andExpect(jsonPath("$.data.warnings").isArray());
     }
 
     @Test
@@ -76,7 +77,49 @@ class AdminPolicyControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(200))
                 .andExpect(jsonPath("$.data.configKey").value(key))
-                .andExpect(jsonPath("$.data.configValue").value(88.50));
+                .andExpect(jsonPath("$.data.configValue").value(88.50))
+                .andExpect(jsonPath("$.data.warnings").isArray());
+    }
+
+    @Test
+    void updatePolicy_WhenStoreRewardExceedsJoinFee_ReturnsWarning() throws Exception {
+        mockMvc.perform(put("/api/admin/policy")
+                .contextPath("/api")
+                .header("Authorization", adminToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                        "configKey", "STORE_REWARD_DIRECT",
+                        "configValue", new BigDecimal("20000.00"),
+                        "description", "后台政策测试配置"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.data.warnings[0]").exists());
+    }
+
+    @Test
+    void updatePolicy_WithoutConfigKey_ReturnsBusinessError() throws Exception {
+        mockMvc.perform(put("/api/admin/policy")
+                .contextPath("/api")
+                .header("Authorization", adminToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of("configValue", new BigDecimal("199.00")))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(400))
+                .andExpect(jsonPath("$.message").value("配置键不能为空"));
+    }
+
+    @Test
+    void updatePolicy_WithInvalidConfigValue_ReturnsBusinessError() throws Exception {
+        mockMvc.perform(put("/api/admin/policy")
+                .contextPath("/api")
+                .header("Authorization", adminToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                        "configKey", nextPolicyKey(),
+                        "configValue", "abc"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(400))
+                .andExpect(jsonPath("$.message").value("配置值格式无效"));
     }
 
     @Test

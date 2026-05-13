@@ -191,6 +191,29 @@ CREATE TABLE gyt_user_hierarchy (
     KEY idx_user_hierarchy_parent_id (parent_id)
 );
 
+INSERT INTO gyt_config_policy (config_key, config_value, description, version, status) VALUES
+('STORE_JOIN_FEE', 13960.00, '店铺加盟费', 1, 1),
+('AGENT_JOIN_FEE', 39800.00, '代理加盟费', 1, 1),
+('PARTNER_JOIN_FEE', 99800.00, '合伙人加盟费', 1, 1),
+('STORE_REWARD_DIRECT', 9000.00, '店主直推店铺奖励', 1, 1),
+('AGENT_REWARD_DIRECT', 9000.00, '代理直推店铺奖励', 1, 1),
+('PARTNER_REWARD_DIRECT', 9000.00, '合伙人直推店铺奖励', 1, 1),
+('STORE_DIRECT_REWARD_START_COUNT', 2.00, '直推第几家店铺开始奖励', 1, 1),
+('STORE_INDIRECT_REWARD_ENABLED', 0.00, '是否启用间推店铺奖励: 0-否 1-是', 1, 1),
+('REWARD_INDIRECT', 0.00, '间推店铺奖励金额', 1, 1),
+('AGENT_REWARD_DIRECT_AGENT', 16000.00, '直推代理奖励', 1, 1),
+('PARTNER_REWARD_DIRECT_PARTNER', 40000.00, '合伙人直推合伙人奖励', 1, 1),
+('PARTNER_REWARD_DIRECT_AGENT', 16000.00, '合伙人直推代理奖励', 1, 1),
+('PARTNER_TEAM_MANAGEMENT', 998.00, '团队管理津贴/家', 1, 1),
+('PARTNER_TEAM_MANAGEMENT_START_COUNT', 2.00, '团队管理津贴起始店铺数', 1, 1),
+('PARTNER_TEAM_MANAGEMENT_END_COUNT', 100.00, '团队管理津贴结束店铺数', 1, 1),
+('PARTNER_MANAGE_FEE', 39800.00, '代理商管理培训费', 1, 1),
+('HEADQUARTER_SUPPORT_FEE', 9800.00, '总部培训支持费', 1, 1),
+('PRODUCT_DISCOUNT', 0.15, '产品进货折扣', 1, 1),
+('CLOUD_WAREHOUSE_FEE', 39.80, '云仓代发服务费/套', 1, 1),
+('WITHDRAWAL_FEE_RATE', 0.005, '提现手续费率', 1, 1),
+('WITHDRAWAL_MIN_AMOUNT', 100.00, '最低提现金额', 1, 1);
+
 INSERT INTO gyt_product (product_name, product_code, product_type, market_price, join_price, agent_price, partner_price, stock, unit, description, status) VALUES
 ('药师祖庭调理仪', 'YST-DEVICE-001', 1, 3980.00, 2980.00, 2680.00, 2380.00, 50, '台', '门店基础调理设备', 1),
 ('药师祖庭养护套盒', 'YST-KIT-001', 2, 1396.00, 998.00, 898.00, 798.00, 200, '套', '会员养护服务套盒', 1),

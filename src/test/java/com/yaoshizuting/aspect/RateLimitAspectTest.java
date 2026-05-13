@@ -69,7 +69,7 @@ class RateLimitAspectTest {
         when(rateLimit.limit()).thenReturn(10);
         when(rateLimit.period()).thenReturn(60);
         when(rateLimit.type()).thenReturn(RateLimit.RateLimitType.IP);
-        when(valueOperations.increment(anyString())).thenReturn(1L);
+        when(valueOperations.increment(anyString())).thenReturn(2L);
         when(joinPoint.proceed()).thenReturn("success");
 
         Object result = aspect.enforceRateLimit(joinPoint, rateLimit);
@@ -95,11 +95,25 @@ class RateLimitAspectTest {
         when(rateLimit.limit()).thenReturn(10);
         when(rateLimit.period()).thenReturn(60);
         when(rateLimit.type()).thenReturn(RateLimit.RateLimitType.IP);
-        when(valueOperations.increment(anyString())).thenReturn(null);
+        when(valueOperations.increment(anyString())).thenReturn(1L);
         when(joinPoint.proceed()).thenReturn("success");
 
         Object result = aspect.enforceRateLimit(joinPoint, rateLimit);
         
+        assertEquals("success", result);
+        verify(redisTemplate).expire(anyString(), eq(60L), eq(TimeUnit.SECONDS));
+    }
+
+    @Test
+    void testEnforceRateLimit_WhenIncrementReturnsNull_SetsFallbackValueWithExpiry() throws Throwable {
+        when(rateLimit.limit()).thenReturn(10);
+        when(rateLimit.period()).thenReturn(60);
+        when(rateLimit.type()).thenReturn(RateLimit.RateLimitType.IP);
+        when(valueOperations.increment(anyString())).thenReturn(null);
+        when(joinPoint.proceed()).thenReturn("success");
+
+        Object result = aspect.enforceRateLimit(joinPoint, rateLimit);
+
         assertEquals("success", result);
         verify(valueOperations).set(anyString(), eq(1), eq(60L), eq(TimeUnit.SECONDS));
     }

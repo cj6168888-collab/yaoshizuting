@@ -10,6 +10,7 @@ import com.yaoshizuting.entity.User;
 import com.yaoshizuting.enums.UserRole;
 import com.yaoshizuting.exception.BusinessException;
 import com.yaoshizuting.mapper.UserMapper;
+import com.yaoshizuting.service.TeamService;
 import com.yaoshizuting.utils.CsvExportUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
@@ -36,6 +37,7 @@ import java.util.stream.Collectors;
 public class AdminUserController {
 
     private final UserMapper userMapper;
+    private final TeamService teamService;
 
     @GetMapping
     public ApiResponse<Map<String, Object>> list(
@@ -105,6 +107,7 @@ public class AdminUserController {
             user.setStatus(request.getStatus());
         }
         userMapper.updateById(user);
+        teamService.evictTeamTreeCaches(user);
         return ApiResponse.success(user);
     }
 

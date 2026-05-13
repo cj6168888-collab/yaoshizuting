@@ -14,7 +14,9 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
@@ -74,5 +76,38 @@ public class TeamServiceImpl implements TeamService {
             log.warn("Failed to cache team tree: {}", e.getMessage());
         }
         return result;
+    }
+
+    @Override
+    public void evictTeamTreeCaches(User user) {
+        if (user == null) {
+            return;
+        }
+
+        Set<Long> userIds = new LinkedHashSet<>();
+        addPositiveId(userIds, user.getId());
+        addPositiveId(userIds, user.getParentId());
+        if (user.getTreePath() != null) {
+            for (String part : user.getTreePath().split("/")) {
+                try {
+                    addPositiveId(userIds, Long.parseLong(part));
+                } catch (NumberFormatException ignored) {
+                }
+            }
+        }
+
+        for (Long userId : userIds) {
+            try {
+                redisTemplate.delete(TEAM_CACHE_PREFIX + userId);
+            } catch (Exception e) {
+                log.warn("Failed to evict team tree cache: userId={}, error={}", userId, e.getMessage());
+            }
+        }
+    }
+
+    private void addPositiveId(Set<Long> userIds, Long userId) {
+        if (userId != null && userId > 0) {
+            userIds.add(userId);
+        }
     }
 }

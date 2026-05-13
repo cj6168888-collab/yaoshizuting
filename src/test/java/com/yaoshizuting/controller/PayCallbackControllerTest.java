@@ -115,6 +115,34 @@ class PayCallbackControllerTest {
     }
 
     @Test
+    void wechatNotify_WithCompletedOrder_SkipsStatusUpdateAndProfit() throws Exception {
+        String body = """
+                {"out_trade_no":"ORD-REPLAY-COMPLETED","transaction_id":"WX-TX-COMPLETED","result_code":"SUCCESS"}
+                """;
+        Order order = buildOrder("ORD-REPLAY-COMPLETED", 1, OrderStatus.COMPLETED.getCode());
+
+        when(signatureService.isAllowedIP("127.0.0.1")).thenReturn(true);
+        when(signatureService.verifyWechatSignature("sig", body.trim(), "ts", "nonce")).thenReturn(true);
+        when(orderService.getOrderByOrderSn("ORD-REPLAY-COMPLETED")).thenReturn(order);
+
+        mockMvc.perform(post("/v1/pay/wechat/notify")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body)
+                .header("Wechatpay-Signature", "sig")
+                .header("Wechatpay-Timestamp", "ts")
+                .header("Wechatpay-Nonce", "nonce")
+                .with(request -> {
+                    request.setRemoteAddr("127.0.0.1");
+                    return request;
+                }))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(200));
+
+        verify(orderService, never()).updateOrderStatus("ORD-REPLAY-COMPLETED", OrderStatus.PAID.getCode(), "WX-TX-COMPLETED");
+        verifyNoInteractions(profitService);
+    }
+
+    @Test
     void wechatNotify_WithUnsuccessfulResult_DoesNotLookupOrder() throws Exception {
         String body = """
                 {"out_trade_no":"ORD-FAILED-001","transaction_id":"WX-TX-003","result_code":"FAIL"}

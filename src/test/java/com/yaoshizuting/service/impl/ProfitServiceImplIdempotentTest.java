@@ -3,11 +3,13 @@ package com.yaoshizuting.service.impl;
 import com.yaoshizuting.entity.ProfitLog;
 import com.yaoshizuting.entity.User;
 import com.yaoshizuting.enums.ProfitType;
+import com.yaoshizuting.mapper.OrderMapper;
 import com.yaoshizuting.mapper.ProfitLogMapper;
 import com.yaoshizuting.mapper.UserMapper;
 import com.yaoshizuting.mapper.WithdrawalMapper;
 import com.yaoshizuting.service.DistributedLockService;
 import com.yaoshizuting.service.PolicyConfigService;
+import com.yaoshizuting.service.TeamService;
 import com.yaoshizuting.service.ProfitService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -30,6 +32,9 @@ public class ProfitServiceImplIdempotentTest {
     private UserMapper userMapper;
 
     @Mock
+    private OrderMapper orderMapper;
+
+    @Mock
     private ProfitLogMapper profitLogMapper;
 
     @Mock
@@ -41,12 +46,15 @@ public class ProfitServiceImplIdempotentTest {
     @Mock
     private WithdrawalMapper withdrawalMapper;
 
+    @Mock
+    private TeamService teamService;
+
     @InjectMocks
     private ProfitServiceImpl profitService;
 
     @BeforeEach
     void setUp() {
-        profitService = new ProfitServiceImpl(userMapper, profitLogMapper, policyConfigService, lockService, withdrawalMapper);
+        profitService = new ProfitServiceImpl(userMapper, orderMapper, profitLogMapper, policyConfigService, lockService, withdrawalMapper, teamService);
     }
 
     @Test
@@ -55,6 +63,7 @@ public class ProfitServiceImplIdempotentTest {
         User parent = new User();
         parent.setId(1L);
         parent.setRole(1); // STORE
+        parent.setStoreCount(1);
         parent.setBalance(BigDecimal.ZERO);
         parent.setTotalEarnings(BigDecimal.ZERO);
 
@@ -75,9 +84,12 @@ public class ProfitServiceImplIdempotentTest {
         // Mocks
         when(userMapper.selectById(newUser.getId())).thenReturn(newUser);
         when(userMapper.selectById(parent.getId())).thenReturn(parent, parent, parent);
+        when(policyConfigService.getConfigValue("STORE_DIRECT_REWARD_START_COUNT")).thenReturn(BigDecimal.valueOf(2));
         when(policyConfigService.getConfigValue("STORE_REWARD_DIRECT")).thenReturn(BigDecimal.valueOf(9000));
+        when(policyConfigService.getConfigValue("STORE_INDIRECT_REWARD_ENABLED")).thenReturn(BigDecimal.ZERO);
         when(lockService.tryLock(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyLong()))
                 .thenReturn(true);
+        when(userMapper.updateById(any(User.class))).thenReturn(1);
         // First call returns null (no existing log), second call returns a non-null (existing log)
         when(profitLogMapper.selectByUniqueKey(order.getOrderSn(), ProfitType.DIRECT_STORE.getCode(), parent.getId()))
                 .thenReturn(null).thenReturn(new ProfitLog());

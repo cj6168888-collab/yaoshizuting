@@ -5,6 +5,7 @@ import com.yaoshizuting.dto.LoginResponse;
 import com.yaoshizuting.entity.User;
 import com.yaoshizuting.exception.BusinessException;
 import com.yaoshizuting.mapper.UserMapper;
+import com.yaoshizuting.service.TeamService;
 import com.yaoshizuting.utils.JwtUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -43,11 +44,14 @@ class UserServiceImplTest {
     @Mock
     private ValueOperations<String, Object> valueOperations;
 
+    @Mock
+    private TeamService teamService;
+
     private UserServiceImpl userService;
 
     @BeforeEach
     void setUp() {
-        userService = new UserServiceImpl(userMapper, jwtUtils, redisTemplate);
+        userService = new UserServiceImpl(userMapper, jwtUtils, redisTemplate, teamService);
         lenient().when(redisTemplate.opsForValue()).thenReturn(valueOperations);
     }
 
@@ -121,6 +125,7 @@ class UserServiceImplTest {
         assertEquals(2L, user.getParentId());
         assertEquals("/0/2/", user.getTreePath());
         verify(userMapper).updateById(user);
+        verify(teamService).evictTeamTreeCaches(user);
         verify(redisTemplate).delete("invite:bind:13800138001");
         verify(redisTemplate).delete("sms:code:13800138001");
     }
@@ -167,6 +172,7 @@ class UserServiceImplTest {
         assertEquals(BigDecimal.ZERO, created.getTotalEarnings());
         assertEquals(5, parent.getStoreCount());
         verify(userMapper).insert(created);
+        verify(teamService).evictTeamTreeCaches(created);
         verify(userMapper, never()).updateById(parent);
     }
 
@@ -222,7 +228,7 @@ class UserServiceImplTest {
         parent.setTreePath("/0/");
         parent.setStoreCount(0);
         when(valueOperations.get("sms:code:13800138005")).thenReturn("123456");
-        when(valueOperations.get("invite:bind:13800138005")).thenReturn(Map.of("parentId", 2L));
+        when(valueOperations.get("invite:bind:13800138005")).thenReturn("{\"parentId\":2}");
         when(userMapper.selectByMobile("13800138005")).thenReturn(null);
         when(userMapper.selectById(2L)).thenReturn(parent);
         when(userMapper.selectByMobile("13800138002")).thenReturn(parent);
@@ -239,6 +245,7 @@ class UserServiceImplTest {
         assertEquals(10L, response.getUserId());
         assertEquals(2L, response.getParentId());
         assertEquals("/0/2/", response.getTreePath());
+        verify(teamService).evictTeamTreeCaches(any(User.class));
         verify(redisTemplate).delete("invite:bind:13800138005");
         verify(redisTemplate).delete("sms:code:13800138005");
     }

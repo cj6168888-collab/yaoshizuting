@@ -68,6 +68,20 @@ class ProductServiceImplTest {
     }
 
     @Test
+    void createProductRejectsInvalidStatus() {
+        ProductUpsertRequest request = buildRequest();
+        request.setStatus(9);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> productService.createProduct(request));
+
+        assertEquals(400, exception.getCode());
+        assertEquals("商品状态无效", exception.getMessage());
+        verify(productMapper, never()).insert(any());
+    }
+
+    @Test
     void createProductRejectsDuplicateProductCode() {
         ProductUpsertRequest request = buildRequest();
         request.setProductCode("DUP-CODE");

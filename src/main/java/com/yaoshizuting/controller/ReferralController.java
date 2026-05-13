@@ -1,8 +1,12 @@
 package com.yaoshizuting.controller;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yaoshizuting.dto.ApiResponse;
 import com.yaoshizuting.entity.User;
+import com.yaoshizuting.exception.BusinessException;
 import com.yaoshizuting.mapper.UserMapper;
+import com.yaoshizuting.service.TeamService;
 import com.yaoshizuting.utils.JwtUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +27,8 @@ public class ReferralController {
     private final RedisTemplate<String, Object> redisTemplate;
     private final UserMapper userMapper;
     private final JwtUtils jwtUtils;
+    private final TeamService teamService;
+    private final ObjectMapper objectMapper;
 
     private static final String REFERRAL_LOCK_PREFIX = "referral:lock:";
     private static final long LOCK_EXPIRE_MINUTES = 5;
@@ -93,6 +99,7 @@ public class ReferralController {
             currentUser.setParentId(parentId);
             currentUser.setTreePath(parentTreePath + parent.getId() + "/");
             userMapper.updateById(currentUser);
+            teamService.evictTeamTreeCaches(currentUser);
 
             Map<String, Object> result = new HashMap<>();
             result.put("userId", userId);
@@ -116,12 +123,7 @@ public class ReferralController {
             return ApiResponse.error(400, "手机号格式不正确");
         }
 
-        Long parentId = null;
-        if (parentIdObj instanceof Integer) {
-            parentId = ((Integer) parentIdObj).longValue();
-        } else if (parentIdObj instanceof Long) {
-            parentId = (Long) parentIdObj;
-        }
+        Long parentId = parseParentId(parentIdObj);
 
         if (parentId == null || parentId <= 0) {
             return ApiResponse.error(400, "上级ID无效");
@@ -139,7 +141,7 @@ public class ReferralController {
         bindData.put("parentNickname", parent.getNickname());
         bindData.put("lockedAt", System.currentTimeMillis());
 
-        redisTemplate.opsForValue().set(lockKey, bindData, 30, TimeUnit.MINUTES);
+        redisTemplate.opsForValue().set(lockKey, serializeBindData(bindData), 30, TimeUnit.MINUTES);
 
         Map<String, Object> result = new HashMap<>();
         result.put("mobile", mobile);
@@ -160,7 +162,41 @@ public class ReferralController {
             return ApiResponse.success(Map.of("locked", false));
         }
 
-        return ApiResponse.success((Map<String, Object>) data);
+        return ApiResponse.success(parseBindData(data));
+    }
+
+    private Long parseParentId(Object parentIdObj) {
+        if (parentIdObj instanceof Number number) {
+            return number.longValue();
+        }
+        if (parentIdObj instanceof String text && !text.isBlank()) {
+            try {
+                return Long.parseLong(text.trim());
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        return null;
+    }
+
+    private String serializeBindData(Map<String, Object> bindData) {
+        try {
+            return objectMapper.writeValueAsString(bindData);
+        } catch (Exception e) {
+            throw new BusinessException(500, "锁定上级关系失败");
+        }
+    }
+
+    private Map<String, Object> parseBindData(Object data) {
+        if (data instanceof Map<?, ?> map) {
+            return (Map<String, Object>) map;
+        }
+        if (data instanceof String text && !text.isBlank()) {
+            try {
+                return objectMapper.readValue(text, new TypeReference<Map<String, Object>>() {});
+            } catch (Exception ignored) {
+            }
+        }
+        return Map.of("locked", false);
     }
 
     private Long getUserIdFromRequest(HttpServletRequest request) {

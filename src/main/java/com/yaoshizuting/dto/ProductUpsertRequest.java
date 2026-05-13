@@ -1,6 +1,7 @@
 package com.yaoshizuting.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -55,6 +56,8 @@ public class ProductUpsertRequest {
     @Schema(description = "商品说明", example = "包含店铺会员权益、培训资料和基础推广工具。")
     private String description;
 
+    @Min(value = 0, message = "状态只能为0或1")
+    @Max(value = 1, message = "状态只能为0或1")
     @Schema(description = "状态：0下架，1上架", example = "1")
     private Integer status;
 }

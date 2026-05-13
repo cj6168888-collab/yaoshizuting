@@ -99,8 +99,10 @@ public class PayCallbackController {
             return ApiResponse.error("Order not found");
         }
 
-        if (order.getStatus() == OrderStatus.PAID.getCode()) {
-            log.info("Order already paid, skipping callback replay: orderSn={}", orderSn);
+        if (order.getStatus() == OrderStatus.PAID.getCode()
+                || order.getStatus() == OrderStatus.PROCESSING.getCode()
+                || order.getStatus() == OrderStatus.COMPLETED.getCode()) {
+            log.info("Order already paid or settled, skipping callback replay: orderSn={}, status={}", orderSn, order.getStatus());
             return ApiResponse.success();
         }
 
