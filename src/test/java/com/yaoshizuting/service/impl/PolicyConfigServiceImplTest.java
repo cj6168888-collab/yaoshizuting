@@ -51,6 +51,17 @@ public class PolicyConfigServiceImplTest {
     }
 
     @Test
+    void getConfigValueTrimsCachedValueBeforeParsing() {
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get("policy:direct_rate")).thenReturn(" 0.12 ");
+
+        BigDecimal value = policyConfigService.getConfigValue("direct_rate");
+
+        assertEquals(new BigDecimal("0.12"), value);
+        verify(policyConfigMapper, never()).selectByKey(any());
+    }
+
+    @Test
     void getConfigValueLoadsEnabledConfigAndCachesIt() {
         PolicyConfig config = new PolicyConfig();
         config.setConfigValue(new BigDecimal("0.18"));

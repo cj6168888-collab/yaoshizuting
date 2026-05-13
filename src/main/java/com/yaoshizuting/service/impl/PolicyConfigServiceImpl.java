@@ -56,7 +56,7 @@ public class PolicyConfigServiceImpl implements PolicyConfigService {
         
         Object cached = redisTemplate.opsForValue().get(cacheKey);
         if (cached != null) {
-            return new BigDecimal(cached.toString());
+            return new BigDecimal(cached.toString().trim());
         }
 
         PolicyConfig config = policyConfigMapper.selectByKey(key);
