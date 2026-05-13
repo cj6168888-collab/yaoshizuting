@@ -100,6 +100,28 @@ class AdminUserControllerTest {
     }
 
     @Test
+    void listUsers_WithInvalidRole_ReturnsBusinessError() throws Exception {
+        mockMvc.perform(get("/api/admin/users")
+                .contextPath("/api")
+                .param("role", "99")
+                .header("Authorization", adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(400))
+                .andExpect(jsonPath("$.message").value("用户角色无效"));
+    }
+
+    @Test
+    void listUsers_WithInvalidStatus_ReturnsBusinessError() throws Exception {
+        mockMvc.perform(get("/api/admin/users")
+                .contextPath("/api")
+                .param("status", "2")
+                .header("Authorization", adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(400))
+                .andExpect(jsonPath("$.message").value("账号状态无效"));
+    }
+
+    @Test
     void exportUsers_WithAdminToken_ReturnsCsv() throws Exception {
         mockMvc.perform(get("/api/admin/users/export")
                 .contextPath("/api")
@@ -114,6 +136,17 @@ class AdminUserControllerTest {
                         result.getResponse().getContentAsString().contains(user.getMobile())))
                 .andExpect(result -> org.junit.jupiter.api.Assertions.assertTrue(
                         result.getResponse().getContentAsString().contains(parentUser.getMobile())));
+    }
+
+    @Test
+    void exportUsers_WithInvalidStatus_ReturnsBusinessError() throws Exception {
+        mockMvc.perform(get("/api/admin/users/export")
+                .contextPath("/api")
+                .param("status", "2")
+                .header("Authorization", adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(400))
+                .andExpect(jsonPath("$.message").value("账号状态无效"));
     }
 
     @Test

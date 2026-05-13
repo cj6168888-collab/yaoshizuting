@@ -47,6 +47,7 @@ public class AdminUserController {
             @RequestParam(required = false) Integer role,
             @RequestParam(required = false) Integer status) {
 
+        validateListFilters(role, status);
         LambdaQueryWrapper<User> wrapper = buildListWrapper(keyword, role, status);
 
         Page<User> result = userMapper.selectPage(new Page<>(page, Math.min(size, 100)), wrapper);
@@ -65,6 +66,7 @@ public class AdminUserController {
             @RequestParam(required = false) Integer role,
             @RequestParam(required = false) Integer status) {
 
+        validateListFilters(role, status);
         List<AdminUserView> records = enrichParents(userMapper.selectList(buildListWrapper(keyword, role, status).last("LIMIT 5000")));
         byte[] csv = CsvExportUtils.toCsv(
                 List.of("会员ID", "手机号", "昵称", "角色", "状态", "上级ID", "上级手机号", "上级昵称", "代理数", "店铺数", "余额", "累计收益", "注册时间"),
@@ -101,9 +103,7 @@ public class AdminUserController {
             user.setRole(request.getRole());
         }
         if (request.getStatus() != null) {
-            if (request.getStatus() != 0 && request.getStatus() != 1) {
-                throw new BusinessException(400, "账号状态无效");
-            }
+            validateStatus(request.getStatus());
             user.setStatus(request.getStatus());
         }
         userMapper.updateById(user);
@@ -111,11 +111,24 @@ public class AdminUserController {
         return ApiResponse.success(user);
     }
 
+    private void validateListFilters(Integer role, Integer status) {
+        if (role != null) {
+            validateRole(role);
+        }
+        validateStatus(status);
+    }
+
     private void validateRole(Integer role) {
         try {
             UserRole.fromCode(role);
         } catch (IllegalArgumentException e) {
             throw new BusinessException(400, "用户角色无效");
+        }
+    }
+
+    private void validateStatus(Integer status) {
+        if (status != null && status != 0 && status != 1) {
+            throw new BusinessException(400, "账号状态无效");
         }
     }
 
