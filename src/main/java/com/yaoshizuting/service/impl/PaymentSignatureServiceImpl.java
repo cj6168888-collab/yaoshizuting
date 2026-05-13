@@ -9,7 +9,6 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.util.Arrays;
 import java.util.Base64;
 import java.util.HashSet;
 import java.util.Map;
@@ -32,7 +31,13 @@ public class PaymentSignatureServiceImpl implements PaymentSignatureService {
 
     private void initAllowedIPs() {
         if (allowedIPSet == null) {
-            allowedIPSet = new HashSet<>(Arrays.asList(allowedIPs.split(",")));
+            allowedIPSet = new HashSet<>();
+            for (String allowedIP : allowedIPs.split(",")) {
+                String normalized = allowedIP.trim();
+                if (!normalized.isEmpty()) {
+                    allowedIPSet.add(normalized);
+                }
+            }
         }
     }
 

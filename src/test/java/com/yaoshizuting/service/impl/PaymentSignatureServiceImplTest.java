@@ -31,6 +31,14 @@ class PaymentSignatureServiceImplTest {
     }
 
     @Test
+    void testIsAllowedIP_TrimsConfiguredIPs_ReturnsTrue() {
+        ReflectionTestUtils.setField(signatureService, "allowedIPs", "127.0.0.1, 192.168.1.100, ::1");
+
+        assertTrue(signatureService.isAllowedIP("192.168.1.100"));
+        assertTrue(signatureService.isAllowedIP("::1"));
+    }
+
+    @Test
     void testIsAllowedIP_BlockedIP_ReturnsFalse() {
         assertFalse(signatureService.isAllowedIP("10.0.0.1"));
         assertFalse(signatureService.isAllowedIP("192.168.1.101"));
