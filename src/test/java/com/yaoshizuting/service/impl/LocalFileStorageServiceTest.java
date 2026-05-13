@@ -6,6 +6,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -14,6 +15,8 @@ import java.time.LocalDate;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class LocalFileStorageServiceTest {
 
@@ -80,6 +83,18 @@ class LocalFileStorageServiceTest {
     }
 
     @Test
+    void storeProductImageRejectsMissingContentType() {
+        MockMultipartFile file = new MockMultipartFile("file", "image.png", null, new byte[] {1});
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> fileStorageService.storeProductImage(file));
+
+        assertEquals(400, exception.getCode());
+        assertEquals("仅支持 JPG、PNG、WEBP 图片", exception.getMessage());
+    }
+
+    @Test
     void storeProductImageStoresFileWithOriginalExtension() throws Exception {
         MockMultipartFile file = new MockMultipartFile("file", "Product.PNG", "image/png", new byte[] {1, 2, 3});
 
@@ -100,6 +115,37 @@ class LocalFileStorageServiceTest {
         String url = fileStorageService.storeProductImage(file);
 
         assertTrue(url.endsWith(".webp"));
+    }
+
+    @Test
+    void storeProductImageFallsBackToPngExtensionWhenOriginalFilenameIsNull() {
+        MultipartFile file = mock(MultipartFile.class);
+        when(file.isEmpty()).thenReturn(false);
+        when(file.getSize()).thenReturn(1L);
+        when(file.getContentType()).thenReturn("image/png");
+        when(file.getOriginalFilename()).thenReturn(null);
+
+        String url = fileStorageService.storeProductImage(file);
+
+        assertTrue(url.endsWith(".png"));
+    }
+
+    @Test
+    void storeProductImageFallsBackToJpegExtensionWhenOriginalExtensionIsUnsupported() {
+        MockMultipartFile file = new MockMultipartFile("file", "avatar.gif", "image/jpeg", new byte[] {1});
+
+        String url = fileStorageService.storeProductImage(file);
+
+        assertTrue(url.endsWith(".jpg"));
+    }
+
+    @Test
+    void storeProductImageFallsBackToJpegExtensionWhenFilenameEndsWithDot() {
+        MockMultipartFile file = new MockMultipartFile("file", "avatar.", "image/jpeg", new byte[] {1});
+
+        String url = fileStorageService.storeProductImage(file);
+
+        assertTrue(url.endsWith(".jpg"));
     }
 
     @Test
