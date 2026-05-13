@@ -126,7 +126,7 @@ public class AdminProductController {
     public ApiResponse<Product> updateStatus(
             @Parameter(description = "商品 ID", example = "1") @PathVariable Long id,
             @RequestBody Map<String, Integer> body) {
-        return ApiResponse.success(productService.updateStatus(id, body.get("status")));
+        return ApiResponse.success(productService.updateStatus(id, statusFromBody(body)));
     }
 
     private LambdaQueryWrapper<Product> buildListWrapper(Integer productType, Integer status, String keyword) {
@@ -148,6 +148,13 @@ public class AdminProductController {
         if (status != null && status != 0 && status != 1) {
             throw new BusinessException(400, "商品状态无效");
         }
+    }
+
+    private Integer statusFromBody(Map<String, Integer> body) {
+        if (body == null) {
+            throw new BusinessException(400, "商品状态无效");
+        }
+        return body.get("status");
     }
 
     private ResponseEntity<byte[]> csvResponse(String filename, byte[] csv) {

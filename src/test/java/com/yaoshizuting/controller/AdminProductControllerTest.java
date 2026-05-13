@@ -175,6 +175,29 @@ class AdminProductControllerTest {
     }
 
     @Test
+    void updateStatus_WithoutStatus_ReturnsBusinessError() throws Exception {
+        ProductUpsertRequest request = buildRequest(nextProductCode());
+        String content = mockMvc.perform(post("/api/admin/product")
+                .contextPath("/api")
+                .header("Authorization", adminToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        Long id = objectMapper.readTree(content).path("data").path("id").asLong();
+
+        mockMvc.perform(patch("/api/admin/product/{id}/status", id)
+                .contextPath("/api")
+                .header("Authorization", adminToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(400))
+                .andExpect(jsonPath("$.message").value("商品状态无效"));
+    }
+
+    @Test
     void listProducts_WithAdminToken_ReturnsInactiveProducts() throws Exception {
         String productCode = nextProductCode();
         ProductUpsertRequest request = buildRequest(productCode);
