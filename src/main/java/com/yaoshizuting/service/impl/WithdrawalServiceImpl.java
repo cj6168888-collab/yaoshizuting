@@ -32,28 +32,28 @@ public class WithdrawalServiceImpl implements WithdrawalService {
                                         String accountNo, String accountName, String bankName) {
         User user = userMapper.selectById(userId);
         if (user == null) {
-            throw new BusinessException("用户不存在");
+            throw new BusinessException(404, "用户不存在");
         }
         if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new BusinessException("提现金额必须大于0");
+            throw new BusinessException(400, "提现金额必须大于0");
         }
         if (withdrawType == null || withdrawType < 1 || withdrawType > 3) {
-            throw new BusinessException("提现方式无效");
+            throw new BusinessException(400, "提现方式无效");
         }
         if (StrUtil.isBlank(accountNo) || StrUtil.isBlank(accountName)) {
-            throw new BusinessException("请完善收款信息");
+            throw new BusinessException(400, "请完善收款信息");
         }
         if (withdrawType == 3 && StrUtil.isBlank(bankName)) {
-            throw new BusinessException("银行卡提现需填写开户行");
+            throw new BusinessException(400, "银行卡提现需填写开户行");
         }
 
         BigDecimal minAmount = policyConfigService.getConfigValue("WITHDRAWAL_MIN_AMOUNT");
         if (amount.compareTo(minAmount) < 0) {
-            throw new BusinessException("提现金额不能低于" + minAmount + "元");
+            throw new BusinessException(400, "提现金额不能低于" + minAmount + "元");
         }
 
         if (user.getBalance().compareTo(amount) < 0) {
-            throw new BusinessException("余额不足");
+            throw new BusinessException(400, "余额不足");
         }
 
         BigDecimal feeRate = policyConfigService.getConfigValue("WITHDRAWAL_FEE_RATE");
@@ -87,15 +87,15 @@ public class WithdrawalServiceImpl implements WithdrawalService {
     @Transactional(rollbackFor = Exception.class)
     public void approveWithdrawal(Long withdrawalId, Boolean approved, String remark) {
         if (approved == null) {
-            throw new BusinessException("审核结果不能为空");
+            throw new BusinessException(400, "审核结果不能为空");
         }
         Withdrawal withdrawal = withdrawalMapper.selectById(withdrawalId);
         if (withdrawal == null) {
-            throw new BusinessException("提现记录不存在");
+            throw new BusinessException(404, "提现记录不存在");
         }
 
         if (withdrawal.getStatus() != 0) {
-            throw new BusinessException("该提现申请状态异常");
+            throw new BusinessException(400, "该提现申请状态异常");
         }
 
         if (approved) {
@@ -121,16 +121,18 @@ public class WithdrawalServiceImpl implements WithdrawalService {
     public void completeWithdrawal(Long withdrawalId, String transactionId) {
         Withdrawal withdrawal = withdrawalMapper.selectById(withdrawalId);
         if (withdrawal == null) {
-            throw new BusinessException("提现记录不存在");
+            throw new BusinessException(404, "提现记录不存在");
         }
 
         if (withdrawal.getStatus() != 1) {
-            throw new BusinessException("该提现申请非待打款状态");
+            throw new BusinessException(400, "该提现申请非待打款状态");
         }
 
         withdrawal.setStatus(2);
         withdrawal.setCompleteTime(LocalDateTime.now().toString());
-        withdrawal.setRemark("打款成功");
+        withdrawal.setRemark(StrUtil.isBlank(transactionId)
+                ? "打款成功"
+                : "打款成功，流水号：" + transactionId.trim());
         withdrawal.setUpdateTime(LocalDateTime.now());
         withdrawalMapper.updateById(withdrawal);
 
@@ -142,11 +144,11 @@ public class WithdrawalServiceImpl implements WithdrawalService {
     public void rejectWithdrawal(Long withdrawalId, String remark) {
         Withdrawal withdrawal = withdrawalMapper.selectById(withdrawalId);
         if (withdrawal == null) {
-            throw new BusinessException("提现记录不存在");
+            throw new BusinessException(404, "提现记录不存在");
         }
 
         if (withdrawal.getStatus() != 0) {
-            throw new BusinessException("该提现申请状态异常");
+            throw new BusinessException(400, "该提现申请状态异常");
         }
 
         User user = userMapper.selectById(withdrawal.getUserId());

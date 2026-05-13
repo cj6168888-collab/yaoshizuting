@@ -77,7 +77,9 @@ class SecurityTest {
         mockMvc.perform(get("/api/admin/policy/STORE_JOIN_FEE")
                 .contextPath("/api")
                 .header("Authorization", "Bearer " + userToken))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value(403))
+                .andExpect(jsonPath("$.message").value("权限不足"));
     }
 
     @Test

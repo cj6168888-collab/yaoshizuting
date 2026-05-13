@@ -81,6 +81,7 @@ class WithdrawalServiceImplTest {
                         null));
 
         assertEquals("提现金额不能低于100.00元", exception.getMessage());
+        assertEquals(400, exception.getCode());
         verify(withdrawalMapper, never()).insert(any());
     }
 
@@ -99,6 +100,7 @@ class WithdrawalServiceImplTest {
                         null));
 
         assertEquals("用户不存在", exception.getMessage());
+        assertEquals(404, exception.getCode());
         verify(policyConfigService, never()).getConfigValue(any());
         verify(withdrawalMapper, never()).insert(any());
     }
@@ -118,6 +120,7 @@ class WithdrawalServiceImplTest {
                         null));
 
         assertEquals("提现金额必须大于0", exception.getMessage());
+        assertEquals(400, exception.getCode());
         verify(policyConfigService, never()).getConfigValue(any());
         verify(withdrawalMapper, never()).insert(any());
     }
@@ -137,6 +140,7 @@ class WithdrawalServiceImplTest {
                         null));
 
         assertEquals("提现方式无效", exception.getMessage());
+        assertEquals(400, exception.getCode());
         verify(policyConfigService, never()).getConfigValue(any());
         verify(withdrawalMapper, never()).insert(any());
     }
@@ -156,6 +160,7 @@ class WithdrawalServiceImplTest {
                         null));
 
         assertEquals("请完善收款信息", exception.getMessage());
+        assertEquals(400, exception.getCode());
         verify(policyConfigService, never()).getConfigValue(any());
         verify(withdrawalMapper, never()).insert(any());
     }
@@ -175,6 +180,7 @@ class WithdrawalServiceImplTest {
                         " "));
 
         assertEquals("银行卡提现需填写开户行", exception.getMessage());
+        assertEquals(400, exception.getCode());
         verify(policyConfigService, never()).getConfigValue(any());
         verify(withdrawalMapper, never()).insert(any());
     }
@@ -195,6 +201,7 @@ class WithdrawalServiceImplTest {
                         null));
 
         assertEquals("余额不足", exception.getMessage());
+        assertEquals(400, exception.getCode());
         verify(withdrawalMapper, never()).insert(any());
     }
 
@@ -231,6 +238,7 @@ class WithdrawalServiceImplTest {
                 () -> withdrawalService.approveWithdrawal(1L, null, "审核通过"));
 
         assertEquals("审核结果不能为空", exception.getMessage());
+        assertEquals(400, exception.getCode());
         verify(withdrawalMapper, never()).selectById(any());
         verify(withdrawalMapper, never()).updateById(any());
     }
@@ -244,6 +252,7 @@ class WithdrawalServiceImplTest {
                 () -> withdrawalService.approveWithdrawal(1L, true, "审核通过"));
 
         assertEquals("提现记录不存在", exception.getMessage());
+        assertEquals(404, exception.getCode());
         verify(withdrawalMapper, never()).updateById(any());
     }
 
@@ -256,6 +265,7 @@ class WithdrawalServiceImplTest {
                 () -> withdrawalService.approveWithdrawal(1L, true, "审核通过"));
 
         assertEquals("该提现申请状态异常", exception.getMessage());
+        assertEquals(400, exception.getCode());
         verify(withdrawalMapper, never()).updateById(any());
     }
 
@@ -283,7 +293,7 @@ class WithdrawalServiceImplTest {
         withdrawalService.completeWithdrawal(1L, "TX-001");
 
         assertEquals(2, withdrawal.getStatus());
-        assertEquals("打款成功", withdrawal.getRemark());
+        assertEquals("打款成功，流水号：TX-001", withdrawal.getRemark());
         assertNotNull(withdrawal.getCompleteTime());
         verify(withdrawalMapper).updateById(withdrawal);
     }
@@ -297,6 +307,7 @@ class WithdrawalServiceImplTest {
                 () -> withdrawalService.completeWithdrawal(1L, "TX-001"));
 
         assertEquals("提现记录不存在", exception.getMessage());
+        assertEquals(404, exception.getCode());
         verify(withdrawalMapper, never()).updateById(any());
     }
 
@@ -309,6 +320,7 @@ class WithdrawalServiceImplTest {
                 () -> withdrawalService.completeWithdrawal(1L, "TX-001"));
 
         assertEquals("该提现申请非待打款状态", exception.getMessage());
+        assertEquals(400, exception.getCode());
         verify(withdrawalMapper, never()).updateById(any());
     }
 
@@ -338,6 +350,7 @@ class WithdrawalServiceImplTest {
                 () -> withdrawalService.rejectWithdrawal(1L, "主动驳回"));
 
         assertEquals("提现记录不存在", exception.getMessage());
+        assertEquals(404, exception.getCode());
         verify(userMapper, never()).selectById(any());
         verify(withdrawalMapper, never()).updateById(any());
     }
@@ -351,6 +364,7 @@ class WithdrawalServiceImplTest {
                 () -> withdrawalService.rejectWithdrawal(1L, "主动驳回"));
 
         assertEquals("该提现申请状态异常", exception.getMessage());
+        assertEquals(400, exception.getCode());
         verify(userMapper, never()).selectById(any());
         verify(withdrawalMapper, never()).updateById(any());
     }
