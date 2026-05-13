@@ -3,6 +3,7 @@ package com.yaoshizuting.utils;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class OrderNoUtilsTest {
@@ -27,5 +28,10 @@ class OrderNoUtilsTest {
 
         assertTrue(uuid.matches("[0-9a-fA-F]{32}"));
         assertFalse(uuid.contains("-"));
+    }
+
+    @Test
+    void constructorCanBeInstantiatedForCoverage() {
+        assertNotNull(new OrderNoUtils());
     }
 }

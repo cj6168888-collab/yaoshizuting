@@ -1,5 +1,7 @@
 package com.yaoshizuting.service.impl;
 
+import com.fasterxml.jackson.databind.JsonMappingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yaoshizuting.dto.TeamNodeDTO;
 import com.yaoshizuting.entity.User;
 import com.yaoshizuting.mapper.UserMapper;
@@ -10,7 +12,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
+import org.springframework.test.util.ReflectionTestUtils;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -18,6 +22,7 @@ import java.util.concurrent.TimeUnit;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -173,5 +178,37 @@ class TeamServiceImplTest {
         assertEquals("/0/", node.getTreePath());
         assertEquals("默认路径会员", node.getNickname());
         assertEquals("13800138002", node.getMobile());
+    }
+
+    @Test
+    void getTeamTreeStillReturnsResultWhenCacheSerializationFails() throws Exception {
+        Long userId = 1L;
+        User root = new User();
+        root.setId(userId);
+        root.setTreePath("/0/1/");
+
+        User child = new User();
+        child.setId(2L);
+        child.setParentId(1L);
+        child.setTreePath("/0/1/");
+        child.setRole(1);
+        child.setNickname("缓存失败会员");
+        child.setMobile("13800138002");
+
+        ObjectMapper objectMapper = mock(ObjectMapper.class);
+        when(objectMapper.writeValueAsString(any()))
+                .thenThrow(JsonMappingException.fromUnexpectedIOE(new IOException("serialization failed")));
+        ReflectionTestUtils.setField(teamService, "objectMapper", objectMapper);
+
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get("team:tree:" + userId)).thenReturn(null);
+        when(userMapper.selectById(userId)).thenReturn(root);
+        when(userMapper.selectList(any())).thenReturn(List.of(child));
+
+        List<TeamNodeDTO> result = teamService.getTeamTree(userId);
+
+        assertEquals(1, result.size());
+        assertEquals(2L, result.get(0).getUserId());
+        verify(valueOperations, never()).set(any(), any(), eq(5L), eq(TimeUnit.MINUTES));
     }
 }
