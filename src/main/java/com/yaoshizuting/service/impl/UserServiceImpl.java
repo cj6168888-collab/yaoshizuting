@@ -124,7 +124,8 @@ public class UserServiceImpl implements UserService {
             User parent = userMapper.selectByMobile(inviteCode);
             if (parent != null) {
                 parentId = parent.getId();
-                treePath = parent.getTreePath() + parent.getId() + "/";
+                String parentPath = parent.getTreePath() != null ? parent.getTreePath() : "/0/";
+                treePath = parentPath + parent.getId() + "/";
             }
         }
 
@@ -142,14 +143,6 @@ public class UserServiceImpl implements UserService {
         user.setStatus(1);
 
         userMapper.insert(user);
-
-        if (parentId > 0) {
-            User parent = userMapper.selectById(parentId);
-            if (parent != null) {
-                parent.setStoreCount(parent.getStoreCount() + 1);
-                userMapper.updateById(parent);
-            }
-        }
 
         log.info("创建新用户: mobile={}, parentId={}", mobile, parentId);
         return user;

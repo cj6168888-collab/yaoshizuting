@@ -47,9 +47,11 @@ public class TeamServiceImpl implements TeamService {
         }
         
         String path = user.getTreePath() != null ? user.getTreePath() : "/0/";
+        String descendantPath = path + user.getId() + "/";
         
         LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<>();
-        wrapper.likeRight(User::getTreePath, path)
+        wrapper.likeRight(User::getTreePath, descendantPath)
+               .ne(User::getId, userId)
                .eq(User::getDeleted, 0);
         
         List<User> users = userMapper.selectList(wrapper);

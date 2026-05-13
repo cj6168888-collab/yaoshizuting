@@ -94,9 +94,6 @@ public class ReferralController {
             currentUser.setTreePath(parentTreePath + parent.getId() + "/");
             userMapper.updateById(currentUser);
 
-            parent.setStoreCount((parent.getStoreCount() != null ? parent.getStoreCount() : 0) + 1);
-            userMapper.updateById(parent);
-
             Map<String, Object> result = new HashMap<>();
             result.put("userId", userId);
             result.put("parentId", parentId);

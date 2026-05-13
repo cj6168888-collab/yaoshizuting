@@ -47,7 +47,7 @@ class TeamServiceImplTest {
         Long userId = 1L;
         User root = new User();
         root.setId(userId);
-        root.setTreePath("/0/1/");
+        root.setTreePath("/0/");
 
         User a = new User();
         a.setId(2L);
@@ -120,7 +120,7 @@ class TeamServiceImplTest {
         Long userId = 1L;
         User root = new User();
         root.setId(userId);
-        root.setTreePath("/0/1/");
+        root.setTreePath("/0/");
 
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
         when(valueOperations.get("team:tree:" + userId)).thenReturn("{invalid-json");
@@ -159,7 +159,7 @@ class TeamServiceImplTest {
         User child = new User();
         child.setId(2L);
         child.setParentId(1L);
-        child.setTreePath("/0/");
+        child.setTreePath("/0/1/");
         child.setRole(1);
         child.setNickname("默认路径会员");
         child.setMobile("13800138002");
@@ -175,7 +175,7 @@ class TeamServiceImplTest {
         TeamNodeDTO node = result.get(0);
         assertEquals(2L, node.getUserId());
         assertEquals(1L, node.getParentId());
-        assertEquals("/0/", node.getTreePath());
+        assertEquals("/0/1/", node.getTreePath());
         assertEquals("默认路径会员", node.getNickname());
         assertEquals("13800138002", node.getMobile());
     }
@@ -185,7 +185,7 @@ class TeamServiceImplTest {
         Long userId = 1L;
         User root = new User();
         root.setId(userId);
-        root.setTreePath("/0/1/");
+        root.setTreePath("/0/");
 
         User child = new User();
         child.setId(2L);

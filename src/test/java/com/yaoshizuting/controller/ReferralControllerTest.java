@@ -19,6 +19,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -212,7 +213,7 @@ class ReferralControllerTest {
     }
 
     @Test
-    void bindParentUpdatesCurrentUserAndParentWhenLockAcquired() {
+    void bindParentUpdatesCurrentUserWithoutChangingParentStoreCountWhenLockAcquired() {
         when(request.getAttribute("userId")).thenReturn(20L);
         User currentUser = user(20L, "13800138020", "当前用户");
         User parent = user(9L, "13800138009", "上级用户");
@@ -232,9 +233,8 @@ class ReferralControllerTest {
         assertEquals("/0/1/9/", response.getData().get("treePath"));
         assertEquals(9L, currentUser.getParentId());
         assertEquals("/0/1/9/", currentUser.getTreePath());
-        assertEquals(1, parent.getStoreCount());
+        assertNull(parent.getStoreCount());
         verify(userMapper).updateById(currentUser);
-        verify(userMapper).updateById(parent);
         verify(redisTemplate).delete("referral:lock:20");
     }
 
@@ -257,12 +257,13 @@ class ReferralControllerTest {
         assertEquals(200, response.getCode());
         assertEquals(9L, currentUser.getParentId());
         assertEquals("/0/1/9/", currentUser.getTreePath());
-        assertEquals(2, parent.getStoreCount());
+        assertEquals(1, parent.getStoreCount());
+        verify(userMapper).updateById(currentUser);
         verify(redisTemplate).delete("referral:lock:20");
     }
 
     @Test
-    void bindParentUsesDefaultParentTreePathAndIncrementsExistingStoreCount() {
+    void bindParentUsesDefaultParentTreePathWithoutChangingParentStoreCount() {
         when(request.getAttribute("userId")).thenReturn(20L);
         User currentUser = user(20L, "13800138020", "当前用户");
         User parent = user(9L, "13800138009", "上级用户");
@@ -279,9 +280,8 @@ class ReferralControllerTest {
         assertEquals(200, response.getCode());
         assertEquals("/0/9/", response.getData().get("treePath"));
         assertEquals("/0/9/", currentUser.getTreePath());
-        assertEquals(3, parent.getStoreCount());
+        assertEquals(2, parent.getStoreCount());
         verify(userMapper).updateById(currentUser);
-        verify(userMapper).updateById(parent);
         verify(redisTemplate).delete("referral:lock:20");
     }
 

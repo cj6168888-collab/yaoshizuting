@@ -144,12 +144,11 @@ class UserServiceImplTest {
     }
 
     @Test
-    void createNewUserUsesInviteParentAndIncrementsStoreCount() {
+    void createNewUserUsesInviteParentWithoutIncrementingStoreCount() {
         User parent = user(2L, "13800138002", 2);
         parent.setTreePath("/0/");
         parent.setStoreCount(5);
         when(userMapper.selectByMobile("13800138002")).thenReturn(parent);
-        when(userMapper.selectById(2L)).thenReturn(parent);
         doAnswer(invocation -> {
             User inserted = invocation.getArgument(0);
             inserted.setId(10L);
@@ -166,9 +165,9 @@ class UserServiceImplTest {
         assertEquals("/0/2/", created.getTreePath());
         assertEquals(BigDecimal.ZERO, created.getBalance());
         assertEquals(BigDecimal.ZERO, created.getTotalEarnings());
-        assertEquals(6, parent.getStoreCount());
+        assertEquals(5, parent.getStoreCount());
         verify(userMapper).insert(created);
-        verify(userMapper).updateById(parent);
+        verify(userMapper, never()).updateById(parent);
     }
 
     @Test

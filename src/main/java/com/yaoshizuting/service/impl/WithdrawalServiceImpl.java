@@ -1,8 +1,8 @@
 package com.yaoshizuting.service.impl;
 
+import cn.hutool.core.util.StrUtil;
 import com.yaoshizuting.entity.User;
 import com.yaoshizuting.entity.Withdrawal;
-import com.yaoshizuting.enums.AccountStatus;
 import com.yaoshizuting.exception.BusinessException;
 import com.yaoshizuting.mapper.UserMapper;
 import com.yaoshizuting.mapper.WithdrawalMapper;
@@ -33,6 +33,18 @@ public class WithdrawalServiceImpl implements WithdrawalService {
         User user = userMapper.selectById(userId);
         if (user == null) {
             throw new BusinessException("用户不存在");
+        }
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BusinessException("提现金额必须大于0");
+        }
+        if (withdrawType == null || withdrawType < 1 || withdrawType > 3) {
+            throw new BusinessException("提现方式无效");
+        }
+        if (StrUtil.isBlank(accountNo) || StrUtil.isBlank(accountName)) {
+            throw new BusinessException("请完善收款信息");
+        }
+        if (withdrawType == 3 && StrUtil.isBlank(bankName)) {
+            throw new BusinessException("银行卡提现需填写开户行");
         }
 
         BigDecimal minAmount = policyConfigService.getConfigValue("WITHDRAWAL_MIN_AMOUNT");

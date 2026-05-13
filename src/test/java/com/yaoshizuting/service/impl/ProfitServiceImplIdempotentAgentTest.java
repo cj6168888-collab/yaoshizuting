@@ -4,10 +4,10 @@ import com.yaoshizuting.entity.ProfitLog;
 import com.yaoshizuting.entity.User;
 import com.yaoshizuting.mapper.ProfitLogMapper;
 import com.yaoshizuting.mapper.UserMapper;
+import com.yaoshizuting.mapper.WithdrawalMapper;
 import com.yaoshizuting.service.DistributedLockService;
 import com.yaoshizuting.service.PolicyConfigService;
 import com.yaoshizuting.service.ProfitService;
-import com.yaoshizuting.service.OrderService;
 import com.yaoshizuting.enums.ProfitType;
 import com.yaoshizuting.enums.UserRole;
 import org.junit.jupiter.api.Test;
@@ -34,20 +34,20 @@ public class ProfitServiceImplIdempotentAgentTest {
     private ProfitLogMapper profitLogMapper;
 
     @Mock
-    private OrderService orderService;
-
-    @Mock
     private PolicyConfigService policyConfigService;
 
     @Mock
     private DistributedLockService lockService;
+
+    @Mock
+    private WithdrawalMapper withdrawalMapper;
 
     @InjectMocks
     private ProfitServiceImpl profitService;
 
     @BeforeEach
     void setUp() {
-        profitService = new ProfitServiceImpl(userMapper, profitLogMapper, orderService, policyConfigService, lockService);
+        profitService = new ProfitServiceImpl(userMapper, profitLogMapper, policyConfigService, lockService, withdrawalMapper);
     }
 
     @Test
@@ -74,9 +74,10 @@ public class ProfitServiceImplIdempotentAgentTest {
         // Mocks
         when(userMapper.selectById(newAgent.getId())).thenReturn(newAgent);
         when(userMapper.selectById(partner.getId())).thenReturn(partner, partner, partner);
-        when(policyConfigService.getConfigValue("PARTNER_REWARD_DIRECT_AGENT")).thenReturn(BigDecimal.valueOf(16000));
+        when(policyConfigService.getConfigValue("PARTNER_MANAGE_FEE")).thenReturn(BigDecimal.valueOf(39800));
         when(lockService.tryLock(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyLong()))
                 .thenReturn(true);
+        when(userMapper.updateById(any(User.class))).thenReturn(1);
         // First call returns null (no existing log), second call returns a non-null (existing log)
         when(profitLogMapper.selectByUniqueKey(order.getOrderSn(), ProfitType.AGENT_MANAGE.getCode(), partner.getId()))
                 .thenReturn(null).thenReturn(new ProfitLog());

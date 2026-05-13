@@ -20,6 +20,20 @@ let codeTimer = null;
 
 const wallet = ref(null);
 const team = ref([]);
+const publicProducts = ref([]);
+const publicProductType = ref('');
+const publicProductLoading = ref(false);
+const joinLoading = ref('');
+const joinMessage = ref('');
+const withdrawalSubmitting = ref(false);
+const withdrawalMessage = ref('');
+const withdrawalForm = ref({
+  amount: '',
+  withdrawType: 1,
+  accountNo: '',
+  accountName: '',
+  bankName: ''
+});
 const inviteQrData = ref(null);
 const parentId = ref('');
 const bindingMobile = ref('');
@@ -60,13 +74,17 @@ const withdrawalPage = ref({ page: 1, size: 20 });
 const profitPage = ref({ page: 1, size: 20 });
 
 const isAdmin = computed(() => Number(role.value) >= 9);
+const canJoinStore = computed(() => Number(role.value) < 1);
+const canJoinAgent = computed(() => Number(role.value) >= 1 && Number(role.value) < 2);
+const canJoinPartner = computed(() => Number(role.value) >= 2 && Number(role.value) < 3);
 
 const roleNameMap = {
   0: '普通会员',
   1: '店铺会员',
   2: '代理会员',
   3: '合伙人',
-  9: '管理员'
+  9: '管理员',
+  10: '超级管理员'
 };
 
 const accountStatusMap = {
@@ -75,9 +93,9 @@ const accountStatusMap = {
 };
 
 const productTypeMap = {
-  1: '店铺商品',
-  2: '代理商品',
-  3: '合伙商品'
+  1: '仪器',
+  2: '套盒',
+  3: '单品'
 };
 
 const productStatusMap = {
@@ -104,10 +122,23 @@ const policyGroups = [
   {
     title: '分润政策',
     items: [
-      { key: 'PARTNER_REWARD_DIRECT', label: '直推店铺奖励', description: '合伙人直接推荐店铺奖励' },
-      { key: 'AGENT_REWARD_DIRECT', label: '直推代理奖励', description: '直接推荐代理奖励' },
+      { key: 'STORE_REWARD_DIRECT', label: '店主直推店铺奖励', description: '店主直接推荐店铺奖励' },
+      { key: 'AGENT_REWARD_DIRECT', label: '代理直推店铺奖励', description: '代理直接推荐店铺奖励' },
+      { key: 'PARTNER_REWARD_DIRECT', label: '合伙人直推店铺奖励', description: '合伙人直接推荐店铺奖励' },
       { key: 'REWARD_INDIRECT', label: '间推奖励', description: '间接推荐奖励' },
+      { key: 'AGENT_REWARD_DIRECT_AGENT', label: '直推代理奖励', description: '店主或代理直接推荐代理奖励' },
+      { key: 'PARTNER_MANAGE_FEE', label: '代理管理培训费', description: '合伙人招募代理的管理培训费' },
+      { key: 'HEADQUARTER_SUPPORT_FEE', label: '总部培训支持费', description: '合伙人第11名起的总部培训支持费' },
       { key: 'PARTNER_TEAM_MANAGEMENT', label: '团队管理津贴', description: '合伙人团队管理津贴' }
+    ]
+  },
+  {
+    title: '补货与提现',
+    items: [
+      { key: 'PRODUCT_DISCOUNT', label: '进货折扣', description: '店铺补货折扣' },
+      { key: 'CLOUD_WAREHOUSE_FEE', label: '云仓代发服务费', description: '0元进货模式服务费' },
+      { key: 'WITHDRAWAL_FEE_RATE', label: '提现手续费率', description: '提现手续费比例' },
+      { key: 'WITHDRAWAL_MIN_AMOUNT', label: '最低提现金额', description: '用户可提交提现的最低金额' }
     ]
   }
 ];
@@ -304,6 +335,72 @@ async function loadWallet() {
 async function loadTeam() {
   const data = unwrap(await api.get('/team/tree', { headers: authHeaders() }));
   team.value = data || [];
+}
+
+async function loadPublicProducts() {
+  publicProductLoading.value = true;
+  try {
+    const params = publicProductType.value ? { productType: publicProductType.value } : {};
+    publicProducts.value = unwrap(await api.get('/product/list', { headers: authHeaders(), params })) || [];
+  } catch (error) {
+    productMessage.value = errorMessage(error, '货品列表加载失败');
+  } finally {
+    publicProductLoading.value = false;
+  }
+}
+
+async function createJoinOrder(type) {
+  const endpoints = {
+    store: { url: '/join/store', payload: { payMethod: 'WECHAT' }, label: '店铺加盟订单' },
+    agent: { url: '/join/agent', payload: {}, label: '代理加盟订单' },
+    partner: { url: '/join/partner', payload: {}, label: '合伙人加盟订单' }
+  };
+  const target = endpoints[type];
+  if (!target) return;
+
+  joinLoading.value = type;
+  joinMessage.value = '';
+  try {
+    const data = unwrap(await api.post(target.url, target.payload, { headers: authHeaders() }));
+    joinMessage.value = `${target.label}已创建，订单号 ${data.orderSn}，金额 ¥${formatMoney(data.amount)}`;
+  } catch (error) {
+    joinMessage.value = errorMessage(error, `${target.label}创建失败`);
+  } finally {
+    joinLoading.value = '';
+  }
+}
+
+async function submitWithdrawal() {
+  if (!withdrawalForm.value.amount || Number(withdrawalForm.value.amount) <= 0) {
+    withdrawalMessage.value = '请输入有效提现金额';
+    return;
+  }
+  if (!withdrawalForm.value.accountNo || !withdrawalForm.value.accountName) {
+    withdrawalMessage.value = '请完善收款信息';
+    return;
+  }
+  if (Number(withdrawalForm.value.withdrawType) === 3 && !withdrawalForm.value.bankName) {
+    withdrawalMessage.value = '银行卡提现需填写开户行';
+    return;
+  }
+
+  withdrawalSubmitting.value = true;
+  withdrawalMessage.value = '';
+  try {
+    const payload = {
+      ...withdrawalForm.value,
+      amount: Number(withdrawalForm.value.amount),
+      withdrawType: Number(withdrawalForm.value.withdrawType)
+    };
+    const data = unwrap(await api.post('/withdrawal/apply', payload, { headers: authHeaders() }));
+    withdrawalMessage.value = `提现申请已提交，单号 ${data.withdrawSn}，到账 ¥${formatMoney(data.actualAmount)}`;
+    withdrawalForm.value.amount = '';
+    await loadWallet();
+  } catch (error) {
+    withdrawalMessage.value = errorMessage(error, '提现申请失败');
+  } finally {
+    withdrawalSubmitting.value = false;
+  }
 }
 
 async function loadPolicies() {
@@ -643,6 +740,7 @@ async function completeWithdrawal(item) {
 
 function switchMenu(menu) {
   activeMenu.value = menu;
+  if (menu === 'shop') loadPublicProducts();
   if (menu === 'invite') loadInviteQr();
   if (menu === 'products') loadProducts();
   if (menu === 'users') loadAdminUsers();
@@ -657,8 +755,11 @@ function logout() {
   user.value = {};
   wallet.value = null;
   team.value = [];
+  publicProducts.value = [];
   policies.value = {};
   inviteQrData.value = null;
+  joinMessage.value = '';
+  withdrawalMessage.value = '';
   localStorage.clear();
   currentView.value = 'login';
   mobile.value = '';
@@ -772,6 +873,15 @@ onUnmounted(clearCodeTimer);
             <button class="menu-item" :class="{ active: activeMenu === 'wallet' }" @click="switchMenu('wallet')">
               <span class="mi-icon">¥</span> 我的钱包
             </button>
+            <button class="menu-item" :class="{ active: activeMenu === 'withdraw' }" @click="switchMenu('withdraw')">
+              <span class="mi-icon">提</span> 申请提现
+            </button>
+            <button class="menu-item" :class="{ active: activeMenu === 'shop' }" @click="switchMenu('shop')">
+              <span class="mi-icon">货</span> 货品中心
+            </button>
+            <button class="menu-item" :class="{ active: activeMenu === 'join' }" @click="switchMenu('join')">
+              <span class="mi-icon">加</span> 加盟升级
+            </button>
             <button class="menu-item" :class="{ active: activeMenu === 'team' }" @click="switchMenu('team')">
               <span class="mi-icon">队</span> 我的团队
             </button>
@@ -844,6 +954,91 @@ onUnmounted(clearCodeTimer);
                 <img :src="logoUrl" alt="" />
                 <span>暂无收益记录</span>
               </div>
+            </div>
+          </div>
+        </section>
+
+        <section v-if="activeMenu === 'withdraw'">
+          <div class="page-top">
+            <div class="page-brand"><img :src="logoUrl" alt="" /><span>药师祖庭</span></div>
+            <h2>申请提现</h2>
+            <p>提交收益提现申请并进入后台审核流程</p>
+          </div>
+
+          <div v-if="withdrawalMessage" class="bind-feedback admin-message" :class="{ ok: !isFailureMessage(withdrawalMessage), fail: isFailureMessage(withdrawalMessage) }">{{ withdrawalMessage }}</div>
+          <div class="panel-card">
+            <div class="pc-header"><h3>提现信息</h3><span class="tag-count">可提现 ¥{{ formatMoney(wallet?.balance) }}</span></div>
+            <div class="form-grid">
+              <label><span>提现金额</span><input v-model="withdrawalForm.amount" type="number" min="0" step="0.01" placeholder="最低金额按系统配置校验" /></label>
+              <label><span>提现方式</span><select v-model.number="withdrawalForm.withdrawType"><option :value="1">微信</option><option :value="2">支付宝</option><option :value="3">银行卡</option></select></label>
+              <label><span>收款账号</span><input v-model="withdrawalForm.accountNo" placeholder="请输入收款账号" /></label>
+              <label><span>收款人</span><input v-model="withdrawalForm.accountName" placeholder="请输入收款人姓名" /></label>
+              <label v-if="withdrawalForm.withdrawType === 3" class="span-2"><span>开户行</span><input v-model="withdrawalForm.bankName" placeholder="请输入开户行" /></label>
+              <button class="btn-main span-2" @click="submitWithdrawal" :disabled="withdrawalSubmitting">{{ withdrawalSubmitting ? '提交中...' : '提交提现申请' }}</button>
+            </div>
+          </div>
+        </section>
+
+        <section v-if="activeMenu === 'shop'">
+          <div class="page-top">
+            <div class="page-brand"><img :src="logoUrl" alt="" /><span>药师祖庭</span></div>
+            <h2>货品中心</h2>
+            <p>查看当前上架货品、价格与库存</p>
+          </div>
+
+          <div v-if="productMessage" class="bind-feedback admin-message" :class="{ ok: !isFailureMessage(productMessage), fail: isFailureMessage(productMessage) }">{{ productMessage }}</div>
+          <div class="panel-card">
+            <div class="pc-header"><h3>货品筛选</h3><span class="tag-count">{{ publicProducts.length }} 件</span></div>
+            <div class="filter-bar">
+              <select v-model="publicProductType"><option value="">全部类型</option><option value="1">仪器</option><option value="2">套盒</option><option value="3">单品</option></select>
+              <button class="btn-main" @click="loadPublicProducts" :disabled="publicProductLoading">{{ publicProductLoading ? '加载中' : '查询' }}</button>
+            </div>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead><tr><th>货品</th><th>类型</th><th>价格</th><th>库存</th><th>说明</th></tr></thead>
+                <tbody>
+                  <tr v-for="item in publicProducts" :key="item.id">
+                    <td><div class="product-cell"><img :src="imageUrl(item.image)" alt="" /><div><b>{{ item.productName }}</b><span>{{ item.productCode || `ID ${item.id}` }}</span></div></div></td>
+                    <td>{{ productTypeMap[item.productType] || item.productType }}</td>
+                    <td><div class="price-stack"><span>加盟 ¥{{ formatMoney(item.joinPrice) }}</span><span>市场 ¥{{ formatMoney(item.marketPrice) }}</span></div></td>
+                    <td>{{ item.stock }} {{ item.unit || '套' }}</td>
+                    <td>{{ item.description || '-' }}</td>
+                  </tr>
+                  <tr v-if="!publicProducts.length"><td colspan="5"><div class="empty-inline"><img :src="logoUrl" alt="" />暂无上架货品</div></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section v-if="activeMenu === 'join'">
+          <div class="page-top">
+            <div class="page-brand"><img :src="logoUrl" alt="" /><span>药师祖庭</span></div>
+            <h2>加盟升级</h2>
+            <p>按当前身份创建店铺、代理或合伙人加盟订单</p>
+          </div>
+
+          <div v-if="joinMessage" class="bind-feedback admin-message" :class="{ ok: !isFailureMessage(joinMessage), fail: isFailureMessage(joinMessage) }">{{ joinMessage }}</div>
+          <div class="asset-cards">
+            <div class="asset-card green">
+              <span class="ac-icon">店</span>
+              <div class="ac-body"><span class="ac-label">店铺加盟</span><span class="ac-value">¥{{ formatMoney(policies.STORE_JOIN_FEE || 13960) }}</span></div>
+            </div>
+            <div class="asset-card gold">
+              <span class="ac-icon">代</span>
+              <div class="ac-body"><span class="ac-label">代理升级</span><span class="ac-value">¥{{ formatMoney(policies.AGENT_JOIN_FEE || 39800) }}</span></div>
+            </div>
+            <div class="asset-card blue">
+              <span class="ac-icon">合</span>
+              <div class="ac-body"><span class="ac-label">合伙人升级</span><span class="ac-value">¥{{ formatMoney(policies.PARTNER_JOIN_FEE || 99800) }}</span></div>
+            </div>
+          </div>
+          <div class="panel-card">
+            <div class="pc-header"><h3>可执行操作</h3><span class="tag-count">{{ roleNameMap[role] || '会员' }}</span></div>
+            <div class="pc-body join-actions">
+              <button class="btn-main" @click="createJoinOrder('store')" :disabled="!canJoinStore || joinLoading">{{ joinLoading === 'store' ? '创建中...' : '创建店铺加盟订单' }}</button>
+              <button class="btn-main" @click="createJoinOrder('agent')" :disabled="!canJoinAgent || joinLoading">{{ joinLoading === 'agent' ? '创建中...' : '创建代理加盟订单' }}</button>
+              <button class="btn-main" @click="createJoinOrder('partner')" :disabled="!canJoinPartner || joinLoading">{{ joinLoading === 'partner' ? '创建中...' : '创建合伙人加盟订单' }}</button>
             </div>
           </div>
         </section>
@@ -934,7 +1129,7 @@ onUnmounted(clearCodeTimer);
               <div class="form-grid product-form">
                 <label><span>商品名称</span><input v-model="productForm.productName" placeholder="请输入商品名称" /></label>
                 <label><span>商品编码</span><input v-model="productForm.productCode" placeholder="可选，必须唯一" /></label>
-                <label><span>商品类型</span><select v-model.number="productForm.productType"><option :value="1">店铺商品</option><option :value="2">代理商品</option><option :value="3">合伙商品</option></select></label>
+                <label><span>商品类型</span><select v-model.number="productForm.productType"><option :value="1">仪器</option><option :value="2">套盒</option><option :value="3">单品</option></select></label>
                 <label><span>状态</span><select v-model.number="productForm.status"><option :value="1">上架</option><option :value="0">下架</option></select></label>
                 <label><span>市场价</span><input v-model.number="productForm.marketPrice" type="number" min="0" step="0.01" /></label>
                 <label><span>加盟价</span><input v-model.number="productForm.joinPrice" type="number" min="0" step="0.01" /></label>
@@ -956,7 +1151,7 @@ onUnmounted(clearCodeTimer);
               <div class="pc-header"><h3>商品筛选</h3><span class="tag-count">{{ productTotal }} 条</span></div>
               <div class="filter-bar stacked">
                 <input v-model="productFilters.keyword" placeholder="商品名 / 编码" />
-                <select v-model="productFilters.productType"><option value="">全部类型</option><option value="1">店铺商品</option><option value="2">代理商品</option><option value="3">合伙商品</option></select>
+                <select v-model="productFilters.productType"><option value="">全部类型</option><option value="1">仪器</option><option value="2">套盒</option><option value="3">单品</option></select>
                 <select v-model="productFilters.status"><option value="">全部状态</option><option value="1">上架</option><option value="0">下架</option></select>
                 <button class="btn-main" @click="searchProducts" :disabled="productLoading">{{ productLoading ? '加载中' : '查询' }}</button>
               </div>
@@ -1009,7 +1204,7 @@ onUnmounted(clearCodeTimer);
             <div class="pc-header"><h3>人员筛选</h3><span class="tag-count">{{ userTotal }} 人</span></div>
             <div class="filter-bar">
               <input v-model="userFilters.keyword" placeholder="手机号 / 昵称" />
-              <select v-model="userFilters.role"><option value="">全部角色</option><option value="0">普通会员</option><option value="1">店铺会员</option><option value="2">代理会员</option><option value="3">合伙人</option><option value="9">管理员</option></select>
+              <select v-model="userFilters.role"><option value="">全部角色</option><option value="0">普通会员</option><option value="1">店铺会员</option><option value="2">代理会员</option><option value="3">合伙人</option><option value="9">管理员</option><option value="10">超级管理员</option></select>
               <select v-model="userFilters.status"><option value="">全部状态</option><option value="1">正常</option><option value="0">禁用</option></select>
               <button class="btn-main" @click="searchAdminUsers" :disabled="userLoading">{{ userLoading ? '加载中' : '查询' }}</button>
             </div>
@@ -1032,7 +1227,7 @@ onUnmounted(clearCodeTimer);
                     <td><div class="price-stack"><span>{{ item.parentNickname || item.parentMobile || '-' }}</span><span v-if="item.parentId">ID {{ item.parentId }}</span></div></td>
                     <td>代理 {{ item.agentCount || 0 }} / 店铺 {{ item.storeCount || 0 }}</td>
                     <td><div class="price-stack"><span>余额 ¥{{ formatMoney(item.balance) }}</span><span>累计 ¥{{ formatMoney(item.totalEarnings) }}</span></div></td>
-                    <td><select v-model.number="item.role" @change="updateUser(item, { role: item.role })"><option :value="0">普通会员</option><option :value="1">店铺会员</option><option :value="2">代理会员</option><option :value="3">合伙人</option><option :value="9">管理员</option></select></td>
+                    <td><select v-model.number="item.role" @change="updateUser(item, { role: item.role })"><option :value="0">普通会员</option><option :value="1">店铺会员</option><option :value="2">代理会员</option><option :value="3">合伙人</option><option :value="9">管理员</option><option :value="10">超级管理员</option></select></td>
                     <td><select v-model.number="item.status" @change="updateUser(item, { status: item.status })"><option :value="1">正常</option><option :value="0">禁用</option></select></td>
                     <td>{{ formatTime(item.createTime) }}</td>
                   </tr>
@@ -1271,6 +1466,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--p
 .flow-time { font-size: 12px; color: var(--text3); }
 .flow-amount { font-weight: 700; font-size: 15px; color: var(--text2); white-space: nowrap; }
 .flow-amount.up, .money-up { color: var(--success); }
+.join-actions { display: flex; gap: 12px; flex-wrap: wrap; }
 
 .team-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .team-card { display: flex; align-items: center; gap: 14px; padding: 16px; background: #fafbf8; border-radius: 10px; }

@@ -142,7 +142,7 @@ CREATE TABLE `gyt_withdrawal` (
     `amount` DECIMAL(12,2) NOT NULL COMMENT '提现金额',
     `fee` DECIMAL(12,2) DEFAULT 0.00 COMMENT '手续费',
     `actual_amount` DECIMAL(12,2) NOT NULL COMMENT '实际到账',
-    `withdraw_type` TINYINT NOT NULL COMMENT '类型: 1-微信零钱 2-银行卡',
+    `withdraw_type` TINYINT NOT NULL COMMENT '类型: 1-微信 2-支付宝 3-银行卡',
     `account_no` VARCHAR(50) DEFAULT NULL COMMENT '账号',
     `account_name` VARCHAR(50) DEFAULT NULL COMMENT '户名',
     `bank_name` VARCHAR(50) DEFAULT NULL COMMENT '银行',
@@ -187,4 +187,4 @@ INSERT INTO `gyt_product` (`product_name`, `product_code`, `product_type`, `mark
 
 -- 10. 初始化超级管理员 (密码: admin123)
 INSERT INTO `gyt_user` (`username`, `password`, `mobile`, `nickname`, `role`, `status`) VALUES
-('admin', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iAt6Z5EH', '13800000000', '系统管理员', 3, 1);
+('admin', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iAt6Z5EH', '13800000000', '系统管理员', 10, 1);

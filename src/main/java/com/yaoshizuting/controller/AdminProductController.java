@@ -47,7 +47,7 @@ public class AdminProductController {
     public ApiResponse<Map<String, Object>> list(
             @Parameter(description = "页码，从 1 开始", example = "1") @RequestParam(defaultValue = "1") long page,
             @Parameter(description = "每页数量，最大 100", example = "20") @RequestParam(defaultValue = "20") long size,
-            @Parameter(description = "商品类型：1店铺商品，2代理商品，3合伙商品", example = "1") @RequestParam(required = false) Integer productType,
+            @Parameter(description = "商品类型：1仪器，2套盒，3单品", example = "1") @RequestParam(required = false) Integer productType,
             @Parameter(description = "状态：0下架，1上架", example = "1") @RequestParam(required = false) Integer status,
             @Parameter(description = "商品名或编码关键字", example = "店铺") @RequestParam(required = false) String keyword) {
 
@@ -64,7 +64,7 @@ public class AdminProductController {
     @GetMapping("/export")
     @Operation(summary = "导出商品 CSV", description = "按当前筛选条件导出最多 5000 条商品数据。")
     public ResponseEntity<byte[]> export(
-            @Parameter(description = "商品类型：1店铺商品，2代理商品，3合伙商品", example = "1") @RequestParam(required = false) Integer productType,
+            @Parameter(description = "商品类型：1仪器，2套盒，3单品", example = "1") @RequestParam(required = false) Integer productType,
             @Parameter(description = "状态：0下架，1上架", example = "1") @RequestParam(required = false) Integer status,
             @Parameter(description = "商品名或编码关键字", example = "店铺") @RequestParam(required = false) String keyword) {
 

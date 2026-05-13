@@ -21,7 +21,7 @@ public class ProductUpsertRequest {
     private String productCode;
 
     @NotNull(message = "商品类型不能为空")
-    @Schema(description = "商品类型：1店铺商品，2代理商品，3合伙商品", example = "1", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(description = "商品类型：1仪器，2套盒，3单品", example = "1", requiredMode = Schema.RequiredMode.REQUIRED)
     private Integer productType;
 
     @NotNull(message = "市场价不能为空")

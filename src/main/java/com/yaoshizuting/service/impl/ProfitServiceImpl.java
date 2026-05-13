@@ -11,23 +11,20 @@ import com.yaoshizuting.enums.UserRole;
 import com.yaoshizuting.exception.BusinessException;
 import com.yaoshizuting.mapper.ProfitLogMapper;
 import com.yaoshizuting.mapper.UserMapper;
+import com.yaoshizuting.mapper.WithdrawalMapper;
 import com.yaoshizuting.service.DistributedLockService;
-import com.yaoshizuting.service.OrderService;
 import com.yaoshizuting.service.PolicyConfigService;
 import com.yaoshizuting.service.ProfitService;
-import com.yaoshizuting.testing.TestMode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
 @Service
@@ -36,12 +33,11 @@ public class ProfitServiceImpl implements ProfitService {
 
     private final UserMapper userMapper;
     private final ProfitLogMapper profitLogMapper;
-    private final OrderService orderService;
     private final PolicyConfigService policyConfigService;
     private final DistributedLockService lockService;
+    private final WithdrawalMapper withdrawalMapper;
 
     private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-    private static final ConcurrentHashMap<String, Object> LOG_LOCKS = new ConcurrentHashMap<>();
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -60,6 +56,7 @@ public class ProfitServiceImpl implements ProfitService {
         userMapper.updateById(newUser);
 
         if (newUser.getParentId() != null && newUser.getParentId() > 0) {
+            incrementStoreCounts(newUser);
             distributeStoreJoinProfit(order, newUser);
         }
 
@@ -75,9 +72,10 @@ public class ProfitServiceImpl implements ProfitService {
         BigDecimal directReward = getDirectStoreReward(parent);
         
         if (directReward.compareTo(BigDecimal.ZERO) > 0) {
-            createProfitLog(order.getOrderSn(), parent.getId(), newUser.getId(), directReward, 
-                    ProfitType.DIRECT_STORE.getCode(), "直推店铺奖励");
-            addBalance(parent.getId(), directReward);
+            if (createProfitLog(order.getOrderSn(), parent.getId(), newUser.getId(), directReward,
+                    ProfitType.DIRECT_STORE.getCode(), "直推店铺奖励")) {
+                addBalance(parent.getId(), directReward);
+            }
         }
 
         distributeIndirectReward(order.getOrderSn(), newUser);
@@ -121,9 +119,10 @@ public class ProfitServiceImpl implements ProfitService {
         
         if (indirectParent != null && indirectParent.getId().longValue() != newUser.getParentId().longValue()) {
             BigDecimal indirectReward = policyConfigService.getConfigValue("REWARD_INDIRECT");
-            createProfitLog(orderSn, indirectParent.getId(), newUser.getId(), indirectReward, 
-                    ProfitType.INDIRECT_STORE.getCode(), "间推店铺奖励");
-            addBalance(indirectParent.getId(), indirectReward);
+            if (createProfitLog(orderSn, indirectParent.getId(), newUser.getId(), indirectReward,
+                    ProfitType.INDIRECT_STORE.getCode(), "间推店铺奖励")) {
+                addBalance(indirectParent.getId(), indirectReward);
+            }
         }
     }
 
@@ -144,9 +143,10 @@ public class ProfitServiceImpl implements ProfitService {
                     
                     if (storeCount >= 1 && storeCount <= 100) {
                         BigDecimal managementFee = policyConfigService.getConfigValue("PARTNER_TEAM_MANAGEMENT");
-                        createProfitLog(orderSn, partnerId, newUser.getId(), managementFee,
-                                ProfitType.TEAM_MANAGEMENT.getCode(), "团队管理津贴");
-                        addBalance(partnerId, managementFee);
+                        if (createProfitLog(orderSn, partnerId, newUser.getId(), managementFee,
+                                ProfitType.TEAM_MANAGEMENT.getCode(), "团队管理津贴")) {
+                            addBalance(partnerId, managementFee);
+                        }
                     }
                     break;
                 }
@@ -184,22 +184,16 @@ public class ProfitServiceImpl implements ProfitService {
             return;
         }
 
-        BigDecimal directReward = BigDecimal.ZERO;
-        String description = "直推代理奖励";
-
         if (parent.getRole() == UserRole.PARTNER.getCode()) {
-            directReward = policyConfigService.getConfigValue("PARTNER_REWARD_DIRECT_AGENT");
-            int currentCount = parent.getAgentCount() != null ? parent.getAgentCount() : 0;
-            parent.setAgentCount(currentCount + 1);
-            userMapper.updateById(parent);
+            processPartnerRecruitAgentProfit(parent, newAgent, order.getOrderSn());
+            return;
         } else if (parent.getRole() == UserRole.AGENT.getCode() || parent.getRole() == UserRole.STORE.getCode()) {
-            directReward = policyConfigService.getConfigValue("AGENT_REWARD_DIRECT_AGENT");
-        }
-
-        if (directReward.compareTo(BigDecimal.ZERO) > 0) {
-            createProfitLog(order.getOrderSn(), parent.getId(), newAgent.getId(), directReward, 
-                    ProfitType.AGENT_MANAGE.getCode(), description);
-            addBalance(parent.getId(), directReward);
+            BigDecimal directReward = policyConfigService.getConfigValue("AGENT_REWARD_DIRECT_AGENT");
+            if (directReward.compareTo(BigDecimal.ZERO) > 0
+                    && createProfitLog(order.getOrderSn(), parent.getId(), newAgent.getId(), directReward,
+                    ProfitType.AGENT_MANAGE.getCode(), "直推代理奖励")) {
+                addBalance(parent.getId(), directReward);
+            }
         }
     }
 
@@ -240,28 +234,34 @@ public class ProfitServiceImpl implements ProfitService {
         }
 
         if (directReward.compareTo(BigDecimal.ZERO) > 0) {
-            createProfitLog(order.getOrderSn(), parent.getId(), newPartner.getId(), directReward, 
-                    ProfitType.PARTNER_DIRECT.getCode(), description);
-            addBalance(parent.getId(), directReward);
+            if (createProfitLog(order.getOrderSn(), parent.getId(), newPartner.getId(), directReward,
+                    ProfitType.PARTNER_DIRECT.getCode(), description)) {
+                addBalance(parent.getId(), directReward);
+            }
         }
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void processPartnerRecruitAgentProfit(User partner, User newAgent) {
+        processPartnerRecruitAgentProfit(partner, newAgent, "AGENT-" + newAgent.getId());
+    }
+
+    private void processPartnerRecruitAgentProfit(User partner, User newAgent, String orderSn) {
         int currentCount = partner.getAgentCount() != null ? partner.getAgentCount() : 0;
 
         BigDecimal manageFee = policyConfigService.getConfigValue("PARTNER_MANAGE_FEE");
-        String orderSn = "AGENT-" + newAgent.getId();
-        createProfitLog(orderSn, partner.getId(), newAgent.getId(), manageFee,
-                ProfitType.AGENT_MANAGE.getCode(), "代理商管理培训费");
-        addBalance(partner.getId(), manageFee);
+        if (createProfitLog(orderSn, partner.getId(), newAgent.getId(), manageFee,
+                ProfitType.AGENT_MANAGE.getCode(), "代理商管理培训费")) {
+            addBalance(partner.getId(), manageFee);
+        }
 
         if (currentCount >= 10) {
             BigDecimal supportFee = policyConfigService.getConfigValue("HEADQUARTER_SUPPORT_FEE");
-            createProfitLog("SUP-" + newAgent.getId(), partner.getId(), newAgent.getId(), supportFee.negate(),
-                    ProfitType.HEADQUARTER_SUPPORT_FEE.getCode(), "总部培训支持费");
-            addBalance(partner.getId(), supportFee.negate());
+            if (createProfitLog(orderSn, partner.getId(), newAgent.getId(), supportFee.negate(),
+                    ProfitType.HEADQUARTER_SUPPORT_FEE.getCode(), "总部培训支持费")) {
+                addBalance(partner.getId(), supportFee.negate());
+            }
         }
 
         partner.setAgentCount(currentCount + 1);
@@ -270,20 +270,20 @@ public class ProfitServiceImpl implements ProfitService {
         log.info("处理合伙人招募代理分润: partnerId={}, agentId={}, count={}", partner.getId(), newAgent.getId(), currentCount + 1);
     }
 
-    private void createProfitLog(String orderSnKey, Long receiverId, Long contributorId, BigDecimal amount, 
+    private boolean createProfitLog(String orderSnKey, Long receiverId, Long contributorId, BigDecimal amount,
                                   String type, String description) {
         String lockKey = "profit:lock:" + orderSnKey + ":" + type + ":" + receiverId;
         
         try {
             if (!lockService.tryLock(lockKey, 10, 30)) {
                 log.warn("获取分布式锁失败: orderSn={}, type={}", orderSnKey, type);
-                return;
+                return false;
             }
             
             ProfitLog existingLog = profitLogMapper.selectByUniqueKey(orderSnKey, type, receiverId);
             if (existingLog != null) {
                 log.warn("分润记录已存在，跳过: orderSn={}, type={}", orderSnKey, type);
-                return;
+                return false;
             }
 
             ProfitLog profitLog = new ProfitLog();
@@ -301,6 +301,7 @@ public class ProfitServiceImpl implements ProfitService {
             
             log.info("创建分润记录成功: orderSn={}, receiverId={}, amount={}", 
                     orderSnKey, receiverId, amount);
+            return true;
         } finally {
             lockService.unlock(lockKey);
         }
@@ -345,6 +346,8 @@ public class ProfitServiceImpl implements ProfitService {
         WalletResponse response = new WalletResponse();
         response.setBalance(user.getBalance());
         response.setTotalEarnings(user.getTotalEarnings());
+        response.setTotalWithdrawn(withdrawalMapper.sumByUserId(userId));
+        response.setPendingAmount(withdrawalMapper.sumAmountByUserIdAndStatus(userId, 0));
 
         List<ProfitLog> logs = profitLogMapper.selectByReceiverId(userId);
         List<WalletResponse.ProfitLogDTO> recentLogs = new ArrayList<>();
@@ -363,5 +366,34 @@ public class ProfitServiceImpl implements ProfitService {
         response.setRecentLogs(recentLogs);
         
         return response;
+    }
+
+    private void incrementStoreCounts(User newStore) {
+        List<Long> userIds = new ArrayList<>();
+        if (newStore.getParentId() != null && newStore.getParentId() > 0) {
+            userIds.add(newStore.getParentId());
+        }
+        if (StrUtil.isNotBlank(newStore.getTreePath())) {
+            String[] pathIds = newStore.getTreePath().split("/");
+            for (String pathId : pathIds) {
+                try {
+                    Long id = Long.parseLong(pathId);
+                    if (id > 0 && !id.equals(newStore.getId()) && !userIds.contains(id)) {
+                        userIds.add(id);
+                    }
+                } catch (NumberFormatException ignored) {
+                }
+            }
+        }
+
+        for (Long userId : userIds) {
+            User user = userMapper.selectById(userId);
+            if (user == null) {
+                continue;
+            }
+            int currentCount = user.getStoreCount() != null ? user.getStoreCount() : 0;
+            user.setStoreCount(currentCount + 1);
+            userMapper.updateById(user);
+        }
     }
 }

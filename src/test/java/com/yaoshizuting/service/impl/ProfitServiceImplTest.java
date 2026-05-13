@@ -10,8 +10,8 @@ import com.yaoshizuting.enums.UserRole;
 import com.yaoshizuting.exception.BusinessException;
 import com.yaoshizuting.mapper.ProfitLogMapper;
 import com.yaoshizuting.mapper.UserMapper;
+import com.yaoshizuting.mapper.WithdrawalMapper;
 import com.yaoshizuting.service.DistributedLockService;
-import com.yaoshizuting.service.OrderService;
 import com.yaoshizuting.service.PolicyConfigService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -46,20 +46,20 @@ public class ProfitServiceImplTest {
     private ProfitLogMapper profitLogMapper;
 
     @Mock
-    private OrderService orderService;
-
-    @Mock
     private PolicyConfigService policyConfigService;
 
     @Mock
     private DistributedLockService lockService;
+
+    @Mock
+    private WithdrawalMapper withdrawalMapper;
 
     @InjectMocks
     private com.yaoshizuting.service.impl.ProfitServiceImpl profitService;
 
     @BeforeEach
     void setUp() {
-        profitService = new ProfitServiceImpl(userMapper, profitLogMapper, orderService, policyConfigService, lockService);
+        profitService = new ProfitServiceImpl(userMapper, profitLogMapper, policyConfigService, lockService, withdrawalMapper);
     }
 
     @Test
@@ -411,7 +411,6 @@ public class ProfitServiceImplTest {
 
         when(policyConfigService.getConfigValue("PARTNER_MANAGE_FEE")).thenReturn(new BigDecimal("39800.00"));
         when(lockService.tryLock(anyString(), anyLong(), anyLong())).thenReturn(false);
-        when(userMapper.selectById(partner.getId())).thenReturn(null);
 
         profitService.processPartnerRecruitAgentProfit(partner, newAgent);
 
@@ -443,14 +442,14 @@ public class ProfitServiceImplTest {
                 .thenReturn(true);
         // balance update flow uses selectById for fetch in addBalance
         when(userMapper.selectById(partner.getId())).thenReturn(partner, partner, partner);
+        when(userMapper.updateById(any(User.class))).thenReturn(1);
 
         // execute
         profitService.processPartnerRecruitAgentProfit(partner, newAgent);
 
         // verify agent count increment
         assertEquals(11, partner.getAgentCount().intValue());
-        // current implementation updates the same in-memory partner instance on each balance refresh
-        assertEquals(new BigDecimal("90000"), partner.getBalance());
+        assertEquals(new BigDecimal("30000"), partner.getBalance());
 
         // verify profit logs: two entries created
         ArgumentCaptor<ProfitLog> logCaptor = ArgumentCaptor.forClass(ProfitLog.class);

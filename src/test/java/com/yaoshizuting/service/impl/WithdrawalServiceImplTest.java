@@ -104,6 +104,82 @@ class WithdrawalServiceImplTest {
     }
 
     @Test
+    void createWithdrawalRejectsNonPositiveAmount() {
+        when(userMapper.selectById(10L)).thenReturn(buildUser(10L, "1000.00"));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> withdrawalService.createWithdrawal(
+                        10L,
+                        BigDecimal.ZERO,
+                        1,
+                        "account-no",
+                        "account-name",
+                        null));
+
+        assertEquals("提现金额必须大于0", exception.getMessage());
+        verify(policyConfigService, never()).getConfigValue(any());
+        verify(withdrawalMapper, never()).insert(any());
+    }
+
+    @Test
+    void createWithdrawalRejectsInvalidWithdrawType() {
+        when(userMapper.selectById(10L)).thenReturn(buildUser(10L, "1000.00"));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> withdrawalService.createWithdrawal(
+                        10L,
+                        new BigDecimal("200.00"),
+                        4,
+                        "account-no",
+                        "account-name",
+                        null));
+
+        assertEquals("提现方式无效", exception.getMessage());
+        verify(policyConfigService, never()).getConfigValue(any());
+        verify(withdrawalMapper, never()).insert(any());
+    }
+
+    @Test
+    void createWithdrawalRejectsMissingAccountInfo() {
+        when(userMapper.selectById(10L)).thenReturn(buildUser(10L, "1000.00"));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> withdrawalService.createWithdrawal(
+                        10L,
+                        new BigDecimal("200.00"),
+                        1,
+                        " ",
+                        "account-name",
+                        null));
+
+        assertEquals("请完善收款信息", exception.getMessage());
+        verify(policyConfigService, never()).getConfigValue(any());
+        verify(withdrawalMapper, never()).insert(any());
+    }
+
+    @Test
+    void createWithdrawalRejectsBankCardWithoutBankName() {
+        when(userMapper.selectById(10L)).thenReturn(buildUser(10L, "1000.00"));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> withdrawalService.createWithdrawal(
+                        10L,
+                        new BigDecimal("200.00"),
+                        3,
+                        "account-no",
+                        "account-name",
+                        " "));
+
+        assertEquals("银行卡提现需填写开户行", exception.getMessage());
+        verify(policyConfigService, never()).getConfigValue(any());
+        verify(withdrawalMapper, never()).insert(any());
+    }
+
+    @Test
     void createWithdrawalRejectsInsufficientBalance() {
         when(userMapper.selectById(10L)).thenReturn(buildUser(10L, "50.00"));
         when(policyConfigService.getConfigValue("WITHDRAWAL_MIN_AMOUNT")).thenReturn(new BigDecimal("10.00"));

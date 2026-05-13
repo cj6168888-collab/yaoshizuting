@@ -5,10 +5,10 @@ import com.yaoshizuting.entity.User;
 import com.yaoshizuting.enums.ProfitType;
 import com.yaoshizuting.mapper.ProfitLogMapper;
 import com.yaoshizuting.mapper.UserMapper;
+import com.yaoshizuting.mapper.WithdrawalMapper;
 import com.yaoshizuting.service.DistributedLockService;
 import com.yaoshizuting.service.PolicyConfigService;
 import com.yaoshizuting.service.ProfitService;
-import com.yaoshizuting.service.OrderService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,20 +33,20 @@ public class ProfitServiceImplIdempotentTest {
     private ProfitLogMapper profitLogMapper;
 
     @Mock
-    private OrderService orderService;
-
-    @Mock
     private PolicyConfigService policyConfigService;
 
     @Mock
     private DistributedLockService lockService;
+
+    @Mock
+    private WithdrawalMapper withdrawalMapper;
 
     @InjectMocks
     private ProfitServiceImpl profitService;
 
     @BeforeEach
     void setUp() {
-        profitService = new ProfitServiceImpl(userMapper, profitLogMapper, orderService, policyConfigService, lockService);
+        profitService = new ProfitServiceImpl(userMapper, profitLogMapper, policyConfigService, lockService, withdrawalMapper);
     }
 
     @Test
