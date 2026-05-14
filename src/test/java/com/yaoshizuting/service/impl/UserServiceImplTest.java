@@ -253,6 +253,33 @@ class UserServiceImplTest {
         verify(redisTemplate).delete("sms:code:13800138005");
     }
 
+    @Test
+    void loginPrioritizesLockedInviteOverRequestInviteCode() {
+        LoginRequest request = loginRequest("13800138006", "123456", "13800138002");
+        User lockedParent = user(1L, "13800138001", 10);
+        lockedParent.setTreePath("/0/");
+        when(valueOperations.get("sms:code:13800138006")).thenReturn("123456");
+        when(valueOperations.get("invite:bind:13800138006")).thenReturn(Map.of("parentId", 1L));
+        when(userMapper.selectByMobile("13800138006")).thenReturn(null);
+        when(userMapper.selectById(1L)).thenReturn(lockedParent);
+        when(userMapper.selectByMobile("13800138001")).thenReturn(lockedParent);
+        doAnswer(invocation -> {
+            User inserted = invocation.getArgument(0);
+            inserted.setId(11L);
+            return 1;
+        }).when(userMapper).insert(any(User.class));
+        when(jwtUtils.generateToken(11L, "13800138006", 0)).thenReturn("jwt-token");
+
+        LoginResponse response = userService.login(request);
+
+        assertEquals("jwt-token", response.getToken());
+        assertEquals(1L, response.getParentId());
+        assertEquals("/0/1/", response.getTreePath());
+        verify(userMapper, never()).selectByMobile("13800138002");
+        verify(redisTemplate).delete("invite:bind:13800138006");
+        verify(redisTemplate).delete("sms:code:13800138006");
+    }
+
     private LoginRequest loginRequest(String mobile, String code, String inviteCode) {
         LoginRequest request = new LoginRequest();
         request.setMobile(mobile);

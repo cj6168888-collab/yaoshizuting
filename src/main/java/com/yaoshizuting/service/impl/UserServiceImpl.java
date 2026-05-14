@@ -65,13 +65,13 @@ public class UserServiceImpl implements UserService {
 
         if (user == null) {
             String inviteCode = request.getInviteCode();
-            if (inviteCode == null && lockedBindData != null) {
+            if (lockedBindData != null) {
                 Object lockedParentId = lockedBindData.get("parentId");
                 if (lockedParentId != null) {
                     User lockedParent = userMapper.selectById(parseLong(lockedParentId));
                     if (lockedParent != null) {
                         inviteCode = lockedParent.getMobile();
-                        log.info("从Redis锁定关系获取上级: mobile={}, parentMobile={}", mobile, inviteCode);
+                        log.info("使用扫码锁定关系创建新用户: mobile={}, parentMobile={}", mobile, inviteCode);
                     }
                 }
             }
