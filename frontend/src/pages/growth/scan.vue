@@ -88,7 +88,7 @@ onShow(loadInvite);
 onShareAppMessage(() => ({
   title: `${invite.value?.parentNickname || '药师祖庭会员'}邀请你加入药师祖庭`,
   path: sharePath.value,
-  imageUrl: '/static/logo.jpg'
+  imageUrl: '/static/share-poster.jpg'
 }));
 </script>
 
