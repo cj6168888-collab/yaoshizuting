@@ -34,7 +34,8 @@
 </template>
 
 <script setup>
-import { ref, onShow } from 'vue';
+import { ref } from 'vue';
+import { onShow } from '@dcloudio/uni-app';
 import { referralAPI } from '../../api';
 
 const invite = ref(null);

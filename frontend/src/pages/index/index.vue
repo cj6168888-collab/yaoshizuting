@@ -91,7 +91,8 @@
 </template>
 
 <script setup>
-import { ref, computed, onShow } from 'vue';
+import { ref, computed } from 'vue';
+import { onShow } from '@dcloudio/uni-app';
 import { useUserStore } from '../../store/user';
 import { financeAPI } from '../../api';
 

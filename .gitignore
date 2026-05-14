@@ -1,6 +1,8 @@
 target/
 frontend/node_modules/
 frontend/dist/
+frontend/dist-mp/
+frontend/.mp-weixin-src/
 nul
 
 *.log
