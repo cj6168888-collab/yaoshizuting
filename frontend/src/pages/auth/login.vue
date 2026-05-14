@@ -7,6 +7,12 @@
     </view>
 
     <view class="form-area">
+      <view v-if="inviteContext.parentId || inviteContext.mobile" class="invite-hint">
+        <text class="hint-title">推荐注册</text>
+        <text class="hint-copy">{{ inviteSummary }}</text>
+        <text v-if="inviteLockMessage" class="hint-status">{{ inviteLockMessage }}</text>
+      </view>
+
       <view class="input-group">
         <input
           v-model="form.mobile"
@@ -58,8 +64,9 @@
 </template>
 
 <script setup>
-import { onUnmounted, ref } from 'vue';
-import { authAPI } from '../../api';
+import { computed, onUnmounted, ref } from 'vue';
+import { onLoad } from '@dcloudio/uni-app';
+import { authAPI, referralAPI } from '../../api';
 import { useUserStore } from '../../store/user';
 
 const userStore = useUserStore();
@@ -73,8 +80,55 @@ const form = ref({
 const loading = ref(false);
 const countdown = ref(0);
 const showInviteCode = ref(true);
+const inviteLockMessage = ref('');
+const inviteContext = ref({
+  parentId: '',
+  mobile: '',
+  inviterName: ''
+});
+const inviteSummary = computed(() => {
+  const name = inviteContext.value.inviterName || inviteContext.value.mobile || '药师祖庭会员';
+  return inviteContext.value.parentId ? `推荐人：${name} · ID ${inviteContext.value.parentId}` : `推荐人：${name}`;
+});
 
 let timer = null;
+
+const parseScene = (scene = '') => {
+  const decoded = decodeURIComponent(scene || '');
+  const params = new URLSearchParams(decoded.replace(/^scene=/, ''));
+  return {
+    parentId: params.get('parentId') || (/^\d+$/.test(decoded) ? decoded : ''),
+    mobile: params.get('mobile') || '',
+    inviterName: params.get('inviterName') || params.get('nickname') || ''
+  };
+};
+
+const applyInviteOptions = (options = {}) => {
+  const scene = parseScene(options.scene);
+  inviteContext.value = {
+    parentId: options.parentId || scene.parentId || '',
+    mobile: options.mobile || options.inviteCode || scene.mobile || '',
+    inviterName: options.inviterName || options.nickname || scene.inviterName || ''
+  };
+  if (inviteContext.value.mobile) {
+    form.value.inviteCode = inviteContext.value.mobile;
+    showInviteCode.value = false;
+  }
+};
+
+const lockInviteForMobile = async () => {
+  inviteLockMessage.value = '';
+  const parentId = Number(inviteContext.value.parentId || 0);
+  if (!parentId || !form.value.mobile || !/^1[3-9]\d{9}$/.test(form.value.mobile)) return;
+
+  const data = await referralAPI.lockParent({
+    mobile: form.value.mobile,
+    parentId
+  });
+  inviteLockMessage.value = data?.parentNickname
+    ? `已锁定推荐人：${data.parentNickname}`
+    : '已锁定推荐关系';
+};
 
 const sendCode = async () => {
   if (!form.value.mobile || form.value.mobile.length !== 11) {
@@ -83,6 +137,7 @@ const sendCode = async () => {
   }
 
   try {
+    await lockInviteForMobile();
     await authAPI.sendCode(form.value.mobile);
 
     uni.showToast({ title: '验证码已发送', icon: 'success' });
@@ -113,6 +168,7 @@ const handleLogin = async () => {
   loading.value = true;
 
   try {
+    await lockInviteForMobile();
     await userStore.login(form.value.mobile, form.value.code, form.value.inviteCode);
     uni.switchTab({ url: '/pages/index/index' });
   } catch (e) {
@@ -121,6 +177,8 @@ const handleLogin = async () => {
     loading.value = false;
   }
 };
+
+onLoad(applyInviteOptions);
 
 onUnmounted(() => {
   if (timer) {
@@ -171,6 +229,36 @@ onUnmounted(() => {
   border-radius: 24rpx;
   padding: 60rpx 40rpx;
   box-shadow: 0 20rpx 40rpx rgba(0, 0, 0, 0.1);
+}
+
+.invite-hint {
+  margin-bottom: 32rpx;
+  padding: 24rpx;
+  border: 2rpx solid #dfe8d7;
+  border-radius: 18rpx;
+  background: #f8fbf3;
+
+  .hint-title {
+    display: block;
+    color: #2b6b1f;
+    font-size: 28rpx;
+    font-weight: 700;
+  }
+
+  .hint-copy {
+    display: block;
+    margin-top: 10rpx;
+    color: #687663;
+    font-size: 24rpx;
+  }
+
+  .hint-status {
+    display: block;
+    margin-top: 10rpx;
+    color: #1d8f4d;
+    font-size: 24rpx;
+    font-weight: 700;
+  }
 }
 
 .input-group {

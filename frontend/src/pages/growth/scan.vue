@@ -13,8 +13,11 @@
       <view v-if="invite" class="invite-box">
         <image class="invite-logo" src="/static/logo.jpg" mode="aspectFill" />
         <text class="invite-name">{{ invite.parentNickname || invite.parentMobile }}</text>
+        <text class="invite-title">扫码加入药师祖庭</text>
+        <text class="invite-desc">微信转发给新会员，点击后直接进入注册页并绑定推荐关系</text>
         <text class="invite-url">{{ invite.inviteUrl }}</text>
-        <button class="brand-btn secondary" @click="copyUrl">复制邀请链接</button>
+        <button class="brand-btn" open-type="share">转发邀请海报</button>
+        <button class="brand-btn secondary" @click="copyUrl">复制 H5 链接</button>
       </view>
       <view v-else class="empty-brand">
         <image src="/static/logo.jpg" mode="aspectFill" />
@@ -34,12 +37,22 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
-import { onShow } from '@dcloudio/uni-app';
+import { computed, ref } from 'vue';
+import { onShareAppMessage, onShow } from '@dcloudio/uni-app';
 import { referralAPI } from '../../api';
 
 const invite = ref(null);
 const mobile = ref('');
+
+const sharePath = computed(() => {
+  if (!invite.value?.parentId) return '/pages/auth/login';
+  const params = new URLSearchParams({
+    parentId: String(invite.value.parentId),
+    mobile: invite.value.parentMobile || '',
+    inviterName: invite.value.parentNickname || invite.value.parentMobile || ''
+  });
+  return `/pages/auth/login?${params.toString()}`;
+});
 
 const loadInvite = async () => {
   try {
@@ -71,6 +84,12 @@ const lockParent = async () => {
 };
 
 onShow(loadInvite);
+
+onShareAppMessage(() => ({
+  title: `${invite.value?.parentNickname || '药师祖庭会员'}邀请你加入药师祖庭`,
+  path: sharePath.value,
+  imageUrl: '/static/logo.jpg'
+}));
 </script>
 
 <style lang="scss" scoped>
@@ -92,6 +111,23 @@ onShow(loadInvite);
   font-size: 30rpx;
   font-weight: 700;
   color: #253322;
+}
+
+.invite-title {
+  display: block;
+  margin-top: 20rpx;
+  color: #2b6b1f;
+  font-size: 38rpx;
+  font-weight: 800;
+}
+
+.invite-desc {
+  display: block;
+  margin: 14rpx auto 0;
+  max-width: 520rpx;
+  color: #7d8876;
+  font-size: 24rpx;
+  line-height: 1.6;
 }
 
 .invite-url {
