@@ -4,6 +4,7 @@ import axios from 'axios';
 import QRCode from 'qrcode';
 import { baseURL } from './utils/config';
 import logoUrl from './static/logo.jpg';
+import sharePosterUrl from './static/share-poster.jpg';
 
 const api = axios.create({ baseURL, timeout: 15000 });
 
@@ -996,10 +997,10 @@ onUnmounted(clearCodeTimer);
           </div>
         </div>
         <div class="hero-product">
-          <img :src="logoUrl" alt="药师祖庭" />
+          <img :src="sharePosterUrl" alt="药师祖庭经络仪和草本蕴养霜" />
           <div>
-            <b>新人专享礼</b>
-            <span>注册即享专属礼包</span>
+            <b>经络仪 + 草本蕴养霜</b>
+            <span>真实产品组合，新人注册专享</span>
           </div>
         </div>
       </section>
@@ -1014,8 +1015,8 @@ onUnmounted(clearCodeTimer);
       <section class="promo-card">
         <div class="promo-copy">
           <span>活动中心</span>
-          <h2>新人专享福利</h2>
-          <p>注册即领礼，首单享优惠，推荐好友加入还可获得积分奖励。</p>
+          <h2>经络仪配套草本蕴养霜</h2>
+          <p>注册进入药师祖庭，了解能量仪、手持探头与草本蕴养霜组合权益。</p>
         </div>
         <button @click="goLogin">马上领取</button>
       </section>
@@ -1647,8 +1648,8 @@ button { cursor: pointer; }
 .hero-primary, .hero-secondary, .promo-card button { display: inline-flex; min-height: 44px; align-items: center; justify-content: center; padding: 0 20px; border-radius: 8px; font-weight: 800; text-decoration: none; }
 .hero-primary, .promo-card button { border: 0; background: var(--pri); color: #fff; box-shadow: 0 8px 18px rgba(43, 107, 31, .18); }
 .hero-secondary { border: 1px solid #cfe4c5; background: #fff; color: var(--pri); }
-.hero-product { display: grid; justify-items: center; gap: 16px; padding: 28px 22px; border-radius: 8px; background: linear-gradient(180deg, #0d4b27 0%, #176832 100%); color: #fff; text-align: center; box-shadow: 0 12px 30px rgba(31, 68, 22, .18); }
-.hero-product img { width: 116px; height: 116px; border-radius: 8px; object-fit: cover; box-shadow: 0 10px 24px rgba(0,0,0,.16); }
+.hero-product { display: grid; justify-items: center; gap: 16px; padding: 16px; border-radius: 8px; background: linear-gradient(180deg, #0d4b27 0%, #176832 100%); color: #fff; text-align: center; box-shadow: 0 12px 30px rgba(31, 68, 22, .18); }
+.hero-product img { width: min(100%, 420px); aspect-ratio: 5 / 4; border-radius: 8px; object-fit: cover; box-shadow: 0 10px 24px rgba(0,0,0,.16); }
 .hero-product b { display: block; color: #f3d47b; font-size: 20px; }
 .hero-product span { color: rgba(255,255,255,.78); font-size: 13px; }
 .growth-benefits { width: min(1120px, calc(100% - 32px)); margin: 0 auto 18px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
