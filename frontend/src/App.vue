@@ -1012,6 +1012,38 @@ onUnmounted(clearCodeTimer);
         <div><b>售后无忧</b><span>服务流程可追踪</span></div>
       </section>
 
+      <section class="product-detail">
+        <div class="section-kicker">产品组合</div>
+        <div class="section-head">
+          <h2>经络仪、手持探头与草本蕴养霜组合呈现</h2>
+          <p>面向门店、美容院、康养馆和家庭养护场景，突出产品展示、会员注册和转发拓客的完整链路。</p>
+        </div>
+        <div class="product-grid">
+          <article>
+            <span>01</span>
+            <h3>经络仪主机</h3>
+            <p>用于门店展示与服务流程承接，页面重点呈现设备形态、品牌识别和会员权益入口。</p>
+          </article>
+          <article>
+            <span>02</span>
+            <h3>手持探头</h3>
+            <p>补充产品使用场景说明，让用户理解套装并非单一礼品，而是可组合展示的养护方案。</p>
+          </article>
+          <article>
+            <span>03</span>
+            <h3>草本蕴养霜</h3>
+            <p>以草本养护、温和肤感、套装规格为核心表达，避免夸大功效，适合海报和详情页转化。</p>
+          </article>
+        </div>
+        <div class="scene-strip">
+          <b>适用场景</b>
+          <span>门店拓客</span>
+          <span>美容院体验</span>
+          <span>康养馆会员</span>
+          <span>家庭养护</span>
+        </div>
+      </section>
+
       <section class="promo-card">
         <div class="promo-copy">
           <span>活动中心</span>
@@ -1656,6 +1688,19 @@ button { cursor: pointer; }
 .growth-benefits div { padding: 16px; border: 1px solid #e2ead9; border-radius: 8px; background: #fff; }
 .growth-benefits b { display: block; color: var(--pri-dark); font-size: 15px; }
 .growth-benefits span { color: var(--text3); font-size: 12px; }
+.product-detail { width: min(1120px, calc(100% - 32px)); margin: 0 auto 18px; padding: 26px; border: 1px solid #dfe8d7; border-radius: 8px; background: #fff; box-shadow: var(--shadow-soft); }
+.section-kicker { display: inline-flex; margin-bottom: 10px; padding: 4px 10px; border-radius: 8px; background: #eef6e8; color: var(--pri); font-size: 13px; font-weight: 800; }
+.section-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 20px; }
+.section-head h2 { max-width: 560px; color: var(--pri-dark); font-size: 26px; line-height: 1.25; }
+.section-head p { max-width: 430px; color: var(--text2); font-size: 14px; }
+.product-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.product-grid article { min-height: 172px; padding: 18px; border: 1px solid #e2ead9; border-radius: 8px; background: linear-gradient(180deg, #fbfcf8 0%, #f3f8ee 100%); }
+.product-grid span { display: inline-flex; width: 38px; height: 30px; align-items: center; justify-content: center; border-radius: 8px; background: #1f5b2d; color: #f3d47b; font-size: 13px; font-weight: 900; }
+.product-grid h3 { margin: 14px 0 8px; color: var(--pri-dark); font-size: 18px; }
+.product-grid p { color: var(--text2); font-size: 14px; }
+.scene-strip { display: flex; align-items: center; gap: 10px; margin-top: 16px; padding-top: 16px; border-top: 1px solid #edf1e7; flex-wrap: wrap; }
+.scene-strip b { color: var(--pri-dark); font-size: 14px; }
+.scene-strip span { display: inline-flex; min-height: 32px; align-items: center; padding: 0 12px; border: 1px solid #dfe8d7; border-radius: 8px; background: #fbfcf8; color: #58714e; font-size: 13px; font-weight: 700; }
 .promo-card, .share-poster { width: min(1120px, calc(100% - 32px)); margin: 0 auto 18px; border: 1px solid #e2ead9; border-radius: 8px; background: #fff; box-shadow: var(--shadow-soft); }
 .promo-card { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 24px; background: linear-gradient(135deg, #fff 0%, #fff9eb 100%); }
 .promo-copy span { color: #b76a00; font-size: 13px; font-weight: 800; }
@@ -1890,6 +1935,11 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--p
   .hero-primary, .hero-secondary, .promo-card button { width: 100%; }
   .hero-product { padding: 22px 18px; }
   .growth-benefits { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .product-detail { padding: 20px; }
+  .section-head { display: block; }
+  .section-head h2 { margin-bottom: 8px; font-size: 23px; }
+  .product-grid { grid-template-columns: 1fr; }
+  .product-grid article { min-height: auto; }
   .promo-card { padding: 18px; }
   .share-poster { grid-template-columns: 1fr; padding: 18px; }
   .poster-art { max-width: 360px; width: 100%; margin: 0 auto; }
@@ -1939,7 +1989,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--p
   .growth-home { padding-bottom: 72px; }
   .mini-brand span { font-size: 15px; }
   .mini-login { padding: 0 10px; }
-  .growth-hero, .growth-benefits, .promo-card, .share-poster { width: calc(100% - 24px); }
+  .growth-hero, .growth-benefits, .product-detail, .promo-card, .share-poster { width: calc(100% - 24px); }
   .growth-benefits { gap: 10px; }
   .growth-benefits div { padding: 13px; }
   .hero-copy h1 { font-size: 28px; }
