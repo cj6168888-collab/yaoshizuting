@@ -989,10 +989,10 @@ onUnmounted(clearCodeTimer);
       <section class="growth-hero">
         <div class="hero-copy">
           <span class="hero-eyebrow">药食同源 · 匠心传承</span>
-          <h1>把健康好礼，带给身边每一位朋友</h1>
-          <p>扫码进入微信小程序式 H5 首页，领取新人专享礼，完成手机号注册后自动承接推荐关系。</p>
+          <h1>把经络养护产品，带给身边每一位朋友</h1>
+          <p>扫码进入微信小程序式 H5 首页，了解经络仪、手持探头与草本蕴养霜组合权益，完成手机号注册后自动承接推荐关系。</p>
           <div class="hero-actions">
-            <button class="hero-primary" @click="goLogin">立即注册领取</button>
+            <button class="hero-primary" @click="goLogin">立即注册了解</button>
             <a class="hero-secondary" href="#poster">查看转发海报</a>
           </div>
         </div>
@@ -1018,7 +1018,7 @@ onUnmounted(clearCodeTimer);
           <h2>经络仪配套草本蕴养霜</h2>
           <p>注册进入药师祖庭，了解能量仪、手持探头与草本蕴养霜组合权益。</p>
         </div>
-        <button @click="goLogin">马上领取</button>
+        <button @click="goLogin">马上了解</button>
       </section>
 
       <section id="poster" class="share-poster">
