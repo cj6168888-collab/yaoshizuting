@@ -19,4 +19,7 @@ public interface WithdrawalMapper extends BaseMapper<Withdrawal> {
 
     @Select("SELECT COALESCE(SUM(actual_amount), 0) FROM gyt_withdrawal WHERE status = #{status} AND deleted = 0")
     BigDecimal sumByStatus(@Param("status") Integer status);
+
+    @Select("SELECT COUNT(*) FROM gyt_withdrawal WHERE status = #{status} AND deleted = 0")
+    Long countByStatus(@Param("status") Integer status);
 }

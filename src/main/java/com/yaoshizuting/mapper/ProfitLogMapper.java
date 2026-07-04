@@ -8,6 +8,7 @@ import org.apache.ibatis.annotations.Select;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 
 @Mapper
 public interface ProfitLogMapper extends BaseMapper<ProfitLog> {
@@ -20,4 +21,16 @@ public interface ProfitLogMapper extends BaseMapper<ProfitLog> {
 
     @Select("SELECT COALESCE(SUM(amount), 0) FROM gyt_profit_log WHERE receiver_id = #{userId} AND status = 1 AND deleted = 0")
     BigDecimal sumByReceiverId(@Param("userId") Long userId);
+
+    @Select("SELECT COALESCE(SUM(amount), 0) FROM gyt_profit_log WHERE status = 1 AND DATE(create_time) = CURRENT_DATE AND deleted = 0")
+    BigDecimal sumTodayProfit();
+
+    @Select("""
+            SELECT type, COALESCE(SUM(amount), 0) AS amount, COUNT(*) AS count
+            FROM gyt_profit_log
+            WHERE status = 1 AND deleted = 0
+            GROUP BY type
+            ORDER BY amount DESC
+            """)
+    List<Map<String, Object>> groupByType();
 }

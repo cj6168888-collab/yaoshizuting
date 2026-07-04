@@ -9,8 +9,12 @@ services:
       - "3307:3306"
     volumes:
       - mysql_data:/var/lib/mysql
-      - ./src/main/resources/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+      - ./src/main/resources/schema.sql:/docker-entrypoint-initdb.d/00_schema.sql
       - ./src/main/resources/docker-init/99_schema_baseline_patch.sql:/docker-entrypoint-initdb.d/99_schema_baseline_patch.sql
+      - ./src/main/resources/docker-init/100_campaign_tables.sql:/docker-entrypoint-initdb.d/100_campaign_tables.sql
+      - ./src/main/resources/docker-init/101_system_config_table.sql:/docker-entrypoint-initdb.d/101_system_config_table.sql
+      - ./src/main/resources/docker-init/102_support_message_table.sql:/docker-entrypoint-initdb.d/102_support_message_table.sql
+      - ./src/main/resources/docker-init/103_notification_table.sql:/docker-entrypoint-initdb.d/103_notification_table.sql
     command: --default-authentication-plugin=mysql_native_password
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]

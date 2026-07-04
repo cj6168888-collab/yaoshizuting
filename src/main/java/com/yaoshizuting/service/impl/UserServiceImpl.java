@@ -41,8 +41,18 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public LoginResponse login(LoginRequest request) {
+        if (StrUtil.isNotBlank(request.getPassword())) {
+            return loginByPassword(request);
+        }
+
         String mobile = request.getMobile();
         String code = request.getCode();
+        if (StrUtil.isBlank(mobile)) {
+            throw new BusinessException(400, "请输入手机号");
+        }
+        if (StrUtil.isBlank(code)) {
+            throw new BusinessException(400, "请输入验证码");
+        }
 
         String cacheKey = SMS_CODE_PREFIX + mobile;
         Object cachedCodeObj = redisTemplate.opsForValue().get(cacheKey);
@@ -106,6 +116,35 @@ public class UserServiceImpl implements UserService {
 
         String token = jwtUtils.generateToken(user.getId(), user.getMobile(), user.getRole());
 
+        LoginResponse response = buildLoginResponse(user, token);
+
+        log.info("用户登录成功: mobile={}, role={}", mobile, user.getRole());
+        return response;
+    }
+
+    private LoginResponse loginByPassword(LoginRequest request) {
+        String account = StrUtil.blankToDefault(request.getUsername(), request.getMobile());
+        if (StrUtil.isBlank(account)) {
+            throw new BusinessException(400, "请输入账号或手机号");
+        }
+
+        User user = userMapper.selectByUsername(account);
+        if (user == null) {
+            user = userMapper.selectByMobile(account);
+        }
+        if (user == null || StrUtil.isBlank(user.getPassword()) || !BCrypt.checkpw(request.getPassword(), user.getPassword())) {
+            throw new BusinessException(400, "账号或密码错误");
+        }
+        if (user.getStatus() == 0) {
+            throw new BusinessException(403, "账号已被冻结，请联系管理员");
+        }
+
+        String token = jwtUtils.generateToken(user.getId(), StrUtil.blankToDefault(user.getMobile(), ""), user.getRole());
+        log.info("账号密码登录成功: userId={}, username={}, role={}", user.getId(), user.getUsername(), user.getRole());
+        return buildLoginResponse(user, token);
+    }
+
+    private LoginResponse buildLoginResponse(User user, String token) {
         LoginResponse response = new LoginResponse();
         response.setToken(token);
         response.setUserId(user.getId());
@@ -115,8 +154,6 @@ public class UserServiceImpl implements UserService {
         response.setAvatar(user.getAvatar());
         response.setParentId(user.getParentId());
         response.setTreePath(user.getTreePath());
-
-        log.info("用户登录成功: mobile={}, role={}", mobile, user.getRole());
         return response;
     }
 

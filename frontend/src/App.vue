@@ -11,8 +11,11 @@ const api = axios.create({ baseURL, timeout: 15000 });
 const token = ref(localStorage.getItem('token') || '');
 const currentView = ref(token.value ? 'dashboard' : 'home');
 const activeMenu = ref('wallet');
+const loginMode = ref('sms');
 const mobile = ref('');
 const code = ref('');
+const account = ref('');
+const password = ref('');
 const role = ref(parseInt(localStorage.getItem('role') || '0', 10));
 const user = ref(JSON.parse(localStorage.getItem('user') || '{}'));
 const loading = ref(false);
@@ -50,6 +53,9 @@ const bindResult = ref(null);
 const policies = ref({});
 const policySaving = ref(false);
 const policyMessage = ref('');
+const systemConfigs = ref({});
+const systemConfigSaving = ref('');
+const systemConfigMessage = ref('');
 
 const products = ref([]);
 const productTotal = ref(0);
@@ -61,12 +67,71 @@ const productFilters = ref({ keyword: '', productType: '', status: '' });
 const productPage = ref({ page: 1, size: 20 });
 const productForm = ref(emptyProductForm());
 
+const campaignCode = ref(parseCampaignCode());
+const publicCampaign = ref(null);
+const publicCampaignQrImage = ref('');
+const campaignH5Tab = ref('home');
+const campaignSignupForm = ref({ mobile: '', nickname: '', remark: '' });
+const campaignOrderRemark = ref('');
+const campaignSignupResult = ref(null);
+const campaignSignupMessage = ref('');
+const campaignSignupLoading = ref(false);
+const partnerCampaigns = ref([]);
+const partnerCampaignSignups = ref([]);
+const partnerCampaignLoading = ref(false);
+const partnerCampaignSaving = ref(false);
+const partnerCampaignMessage = ref('');
+const partnerCampaignQrImage = ref('');
+const selectedCampaignId = ref(null);
+const partnerCampaignForm = ref(emptyCampaignForm());
+
 const adminUsers = ref([]);
 const userTotal = ref(0);
 const userLoading = ref(false);
 const userMessage = ref('');
 const userFilters = ref({ keyword: '', role: '', status: '' });
 const userPage = ref({ page: 1, size: 20 });
+
+const adminOrders = ref([]);
+const orderTotal = ref(0);
+const orderLoading = ref(false);
+const orderMessage = ref('');
+const orderFilters = ref({ keyword: '', status: '', orderType: '', startDate: '', endDate: '' });
+const orderPage = ref({ page: 1, size: 20 });
+
+const supportMessages = ref([]);
+const supportInput = ref('');
+const supportLoading = ref(false);
+const supportMessage = ref('');
+const adminSupportMessages = ref([]);
+const adminSupportTotal = ref(0);
+const adminSupportLoading = ref(false);
+const adminSupportMessage = ref('');
+const adminSupportFilters = ref({ userId: '', keyword: '' });
+const adminSupportPage = ref({ page: 1, size: 50 });
+const adminSupportReplyUserId = ref('');
+const adminSupportReplyText = ref('');
+
+const notifications = ref([]);
+const notificationTotal = ref(0);
+const notificationUnread = ref(0);
+const notificationMessage = ref('');
+const notificationLoading = ref(false);
+const notificationPage = ref({ page: 1, size: 20 });
+const adminNotifications = ref([]);
+const adminNotificationTotal = ref(0);
+const adminNotificationLoading = ref(false);
+const adminNotificationMessage = ref('');
+const adminNotificationFilters = ref({ keyword: '' });
+const adminNotificationPage = ref({ page: 1, size: 20 });
+const notificationForm = ref({ title: '', content: '' });
+
+const auditLogs = ref([]);
+const auditLogTotal = ref(0);
+const auditLogLoading = ref(false);
+const auditLogMessage = ref('');
+const auditLogFilters = ref({ module: '', operatorId: '', keyword: '', startDate: '', endDate: '' });
+const auditLogPage = ref({ page: 1, size: 20 });
 
 const financeSummary = ref({});
 const withdrawals = ref([]);
@@ -80,7 +145,16 @@ const profitTotal = ref(0);
 const withdrawalPage = ref({ page: 1, size: 20 });
 const profitPage = ref({ page: 1, size: 20 });
 
+const dashboardOverview = ref({});
+const dashboardUserGrowth = ref([]);
+const dashboardRevenueTrend = ref([]);
+const dashboardProfitDistribution = ref([]);
+const dashboardRecentOrders = ref([]);
+const dashboardLoading = ref(false);
+const dashboardMessage = ref('');
+
 const isAdmin = computed(() => Number(role.value) >= 9);
+const canManageCampaigns = computed(() => Number(role.value) >= 1 || isAdmin.value);
 const inviterName = computed(() => inviteContext.value.inviterName || inviteContext.value.mobile || '药师祖庭会员');
 const canJoinStore = computed(() => Number(role.value) < 1);
 const canJoinAgent = computed(() => Number(role.value) >= 1 && Number(role.value) < 2);
@@ -109,6 +183,23 @@ const productTypeMap = {
 const productStatusMap = {
   0: '下架',
   1: '上架'
+};
+
+const orderTypeMap = {
+  1: '店铺加盟',
+  2: '代理加盟',
+  3: '合伙人加盟',
+  4: '产品补货',
+  5: '云仓代发'
+};
+
+const orderStatusMap = {
+  0: '待支付',
+  1: '已支付',
+  2: '处理中',
+  3: '已完成',
+  4: '已取消',
+  5: '已退款'
 };
 
 const withdrawalStatusMap = {
@@ -155,7 +246,65 @@ const policyGroups = [
   }
 ];
 
+const systemConfigGroups = [
+  {
+    title: '支付与回调配置',
+    items: [
+      { key: 'WECHAT_APP_ID', label: '微信 AppID', description: '公众号或小程序 AppID' },
+      { key: 'WECHAT_MCH_ID', label: '微信商户号', description: '微信支付商户号' },
+      { key: 'WECHAT_API_KEY', label: '微信支付 API 密钥', description: '微信支付 v2 API 密钥', type: 'password' },
+      { key: 'WECHAT_API_V3_KEY', label: '微信支付 API v3 密钥', description: '微信支付 v3 API 密钥', type: 'password' },
+      { key: 'WECHAT_NOTIFY_URL', label: '微信支付回调地址', description: '微信支付通知回调 URL' },
+      { key: 'PAYMENT_CALLBACK_ALLOWED_IPS', label: '回调 IP 白名单', description: '逗号分隔，如 127.0.0.1,::1' },
+      { key: 'ALIPAY_PUBLIC_KEY', label: '支付宝公钥', description: '支付宝回调验签公钥', type: 'password' }
+    ]
+  }
+];
+
 const policyWarnings = computed(() => evaluatePolicyWarnings(policies.value));
+
+const campaignTemplates = [
+  {
+    name: '9.9 体质调理体验',
+    price: 9.9,
+    quota: 100,
+    title: '9.9元报名尊享体质调理体验',
+    subtitle: '经络仪检测 + 草本养护 + 门店健康建议，到店核销领取',
+    benefitText: '1. 经络仪体质检测一次\n2. 肩颈/腰背调理体验一次\n3. 草本养护方案建议一份',
+    giftText: '报名后 7 天内到店，出示核销码即可体验。建议到店前电话预约，门店会为你预留接待时间。',
+    shareRewardText: '分享好友报名后，可到店领取额外草本养护体验权益，具体以门店规则为准。'
+  },
+  {
+    name: '19.9 肩颈经络体验',
+    price: 19.9,
+    quota: 80,
+    title: '19.9元肩颈经络舒缓体验',
+    subtitle: '适合久坐、低头、肩颈紧张人群，到店体验经络调理',
+    benefitText: '1. 肩颈状态评估\n2. 经络仪舒缓体验\n3. 日常养护建议',
+    giftText: '报名成功后凭核销码到店体验，名额有限，过期需重新预约。',
+    shareRewardText: '邀请好友一起报名，可获得门店专属加赠体验。'
+  },
+  {
+    name: '0元到店检测',
+    price: 0,
+    quota: 50,
+    title: '0元领取体质检测名额',
+    subtitle: '先检测，再了解自己的经络状态和日常养护方向',
+    benefitText: '1. 到店体质检测\n2. 经络状态说明\n3. 门店顾问一对一建议',
+    giftText: '提交手机号后生成预约核销码，到店出示即可检测。',
+    shareRewardText: '分享给好友，好友报名后可共同参与门店加赠活动。'
+  },
+  {
+    name: '老带新体验券',
+    price: 9.9,
+    quota: 120,
+    title: '老带新健康调理体验券',
+    subtitle: '带朋友到店体验，双方都有机会领取门店专属权益',
+    benefitText: '1. 新客体验价到店调理\n2. 老客分享获得加赠权益\n3. 门店核销后沉淀专属服务档案',
+    giftText: '新客报名后到店核销，老客可凭分享记录咨询门店领取权益。',
+    shareRewardText: '每成功邀请一位好友报名，可累计门店福利。'
+  }
+];
 
 function emptyProductForm() {
   return {
@@ -171,6 +320,25 @@ function emptyProductForm() {
     unit: '套',
     image: '',
     description: '',
+    status: 1
+  };
+}
+
+function emptyCampaignForm() {
+  return {
+    id: null,
+    storeName: '',
+    city: '',
+    phone: '',
+    address: '',
+    title: '新人到店养护体验',
+    subtitle: '经络仪 + 草本蕴养霜组合体验，报名后到店核销',
+    price: 9.9,
+    benefitText: '到店体验一次，具体项目以门店说明为准',
+    giftText: '报名后可领取门店新人体验权益',
+    shareRewardText: '分享好友报名后，可按门店活动规则领取额外体验权益',
+    quota: 100,
+    posterImage: '',
     status: 1
   };
 }
@@ -226,6 +394,12 @@ function parseInviteContext() {
   };
 }
 
+function parseCampaignCode() {
+  const params = new URLSearchParams(window.location.search);
+  const hashParams = new URLSearchParams(window.location.hash.split('?')[1] || '');
+  return params.get('campaign') || params.get('activity') || hashParams.get('campaign') || hashParams.get('activity') || '';
+}
+
 function buildPublicInviteUrl() {
   const url = new URL(window.location.origin + window.location.pathname);
   const context = inviteContext.value;
@@ -247,6 +421,208 @@ async function generatePublicPosterQr() {
     });
   } catch (error) {
     publicPosterQrImage.value = '';
+  }
+}
+
+async function loadPublicCampaign() {
+  if (!campaignCode.value) return;
+  campaignSignupMessage.value = '';
+  try {
+    const data = unwrap(await api.get(`/campaign/public/${campaignCode.value}`));
+    publicCampaign.value = data;
+    publicCampaignQrImage.value = data?.shareUrl
+      ? await QRCode.toDataURL(data.shareUrl, {
+        width: 220,
+        margin: 1,
+        color: { dark: '#0f766e', light: '#ffffff' }
+      })
+      : '';
+  } catch (error) {
+    campaignSignupMessage.value = errorMessage(error, '活动加载失败');
+  }
+}
+
+function campaignData() {
+  return publicCampaign.value?.campaign || {};
+}
+
+function campaignRemaining() {
+  const campaign = campaignData();
+  const quota = Number(campaign.quota || 0);
+  if (!quota) return null;
+  return Math.max(0, quota - Number(campaign.signedCount || 0));
+}
+
+function campaignProgressWidth() {
+  const campaign = campaignData();
+  const quota = Number(campaign.quota || 0);
+  if (!quota) return '48%';
+  const signed = Number(campaign.signedCount || 0);
+  return `${Math.min(100, Math.max(8, (signed / quota) * 100))}%`;
+}
+
+function switchCampaignTab(tab) {
+  campaignH5Tab.value = tab;
+  campaignSignupMessage.value = '';
+}
+
+function openCampaignOrder() {
+  campaignH5Tab.value = 'confirm';
+  campaignSignupMessage.value = '';
+}
+
+function callCampaignStore() {
+  const phone = campaignData().phone;
+  if (phone) window.location.href = `tel:${phone}`;
+}
+
+async function copyPublicCampaignLink() {
+  const link = publicCampaign.value?.shareUrl || buildCampaignShareUrl(campaignData().shareCode);
+  if (!link) return;
+  try {
+    await navigator.clipboard.writeText(link);
+    campaignSignupMessage.value = '活动链接已复制，发给好友即可一起报名';
+  } catch (error) {
+    campaignSignupMessage.value = link;
+  }
+}
+
+function applyCampaignTemplate(template) {
+  partnerCampaignForm.value = {
+    ...partnerCampaignForm.value,
+    title: template.title,
+    subtitle: template.subtitle,
+    price: template.price,
+    quota: template.quota,
+    benefitText: template.benefitText,
+    giftText: template.giftText,
+    shareRewardText: template.shareRewardText
+  };
+}
+
+async function submitCampaignSignup() {
+  if (!publicCampaign.value?.campaign?.shareCode) return;
+  if (!/^1[3-9]\d{9}$/.test(campaignSignupForm.value.mobile || '')) {
+    campaignSignupMessage.value = '请输入正确的手机号';
+    return;
+  }
+  campaignSignupLoading.value = true;
+  campaignSignupMessage.value = '';
+  try {
+    const data = unwrap(await api.post(
+      `/campaign/public/${publicCampaign.value.campaign.shareCode}/signup`,
+      campaignSignupForm.value,
+      { headers: authHeaders() }
+    ));
+    campaignSignupMessage.value = data.status === 0
+      ? `报名单已创建，单号 ${data.orderSn}，待支付/门店确认后核销`
+      : `报名成功，核销码 ${data.voucherCode}`;
+    campaignSignupForm.value = { mobile: '', nickname: '', remark: '' };
+    campaignSignupResult.value = data;
+    campaignSignupMessage.value = `报名成功，核销码 ${data.voucherCode}`;
+    campaignH5Tab.value = 'success';
+    campaignSignupForm.value = { mobile: data.mobile || '', nickname: data.nickname || '', remark: '' };
+    campaignOrderRemark.value = '';
+    await loadPublicCampaign();
+  } catch (error) {
+    campaignSignupMessage.value = errorMessage(error, '报名失败');
+  } finally {
+    campaignSignupLoading.value = false;
+  }
+}
+
+async function loadPartnerCampaigns() {
+  partnerCampaignLoading.value = true;
+  try {
+    const data = unwrap(await api.get('/campaign/my', { headers: authHeaders() })) || [];
+    partnerCampaigns.value = data.map((entry) => entry.campaign ? entry : { campaign: entry });
+    if (!selectedCampaignId.value && partnerCampaigns.value.length) {
+      selectCampaign(partnerCampaigns.value[0]);
+    }
+  } catch (error) {
+    partnerCampaignMessage.value = errorMessage(error, '活动加载失败');
+  } finally {
+    partnerCampaignLoading.value = false;
+  }
+}
+
+async function savePartnerCampaign() {
+  if (!partnerCampaignForm.value.storeName || !partnerCampaignForm.value.title) {
+    partnerCampaignMessage.value = '请填写门店名称和活动标题';
+    return;
+  }
+  partnerCampaignSaving.value = true;
+  partnerCampaignMessage.value = '';
+  try {
+    const payload = {
+      ...partnerCampaignForm.value,
+      price: Number(partnerCampaignForm.value.price || 0),
+      quota: Number(partnerCampaignForm.value.quota || 0),
+      status: Number(partnerCampaignForm.value.status ?? 1)
+    };
+    const data = partnerCampaignForm.value.id
+      ? unwrap(await api.put(`/campaign/${partnerCampaignForm.value.id}`, payload, { headers: authHeaders() }))
+      : unwrap(await api.post('/campaign', payload, { headers: authHeaders() }));
+    partnerCampaignMessage.value = '裂变活动已保存';
+    await loadPartnerCampaigns();
+    selectCampaign(data);
+  } catch (error) {
+    partnerCampaignMessage.value = errorMessage(error, '保存活动失败');
+  } finally {
+    partnerCampaignSaving.value = false;
+  }
+}
+
+function resetCampaignForm() {
+  partnerCampaignForm.value = emptyCampaignForm();
+  selectedCampaignId.value = null;
+  partnerCampaignSignups.value = [];
+  partnerCampaignQrImage.value = '';
+}
+
+async function selectCampaign(entry) {
+  const campaign = entry?.campaign || entry;
+  if (!campaign) return;
+  selectedCampaignId.value = campaign.id;
+  partnerCampaignForm.value = { ...emptyCampaignForm(), ...campaign };
+  const shareUrl = entry.shareUrl || buildCampaignShareUrl(campaign.shareCode);
+  partnerCampaignQrImage.value = shareUrl
+    ? await QRCode.toDataURL(shareUrl, {
+      width: 220,
+      margin: 1,
+      color: { dark: '#0f766e', light: '#ffffff' }
+    })
+    : '';
+  await loadCampaignSignups(campaign.id);
+}
+
+function buildCampaignShareUrl(shareCode) {
+  if (!shareCode) return '';
+  const url = new URL(window.location.origin + window.location.pathname);
+  url.searchParams.set('campaign', shareCode);
+  return url.toString();
+}
+
+async function copyCampaignLink() {
+  const link = buildCampaignShareUrl(partnerCampaignForm.value.shareCode);
+  if (!link) {
+    partnerCampaignMessage.value = '请先保存活动生成推广链接';
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(link);
+    partnerCampaignMessage.value = '活动推广链接已复制';
+  } catch {
+    partnerCampaignMessage.value = link;
+  }
+}
+
+async function loadCampaignSignups(campaignId = selectedCampaignId.value) {
+  if (!campaignId) return;
+  try {
+    partnerCampaignSignups.value = unwrap(await api.get(`/campaign/${campaignId}/signups`, { headers: authHeaders() })) || [];
+  } catch (error) {
+    partnerCampaignMessage.value = errorMessage(error, '报名记录加载失败');
   }
 }
 
@@ -292,6 +668,32 @@ function formatMoney(amount) {
 function formatTime(value) {
   if (!value) return '-';
   return String(value).replace('T', ' ').slice(0, 19);
+}
+
+function rowValue(row, key) {
+  if (!row) return undefined;
+  return row[key] ?? row[key.replace(/[A-Z]/g, (match) => `_${match.toLowerCase()}`)];
+}
+
+function dashboardBarWidth(list, key, row) {
+  const max = Math.max(...(list || []).map((item) => Number(rowValue(item, key) || 0)), 1);
+  return `${Math.max(6, (Number(rowValue(row, key) || 0) / max) * 100)}%`;
+}
+
+function dashboardRoleLabel(roleValue) {
+  return roleNameMap[Number(roleValue)] || `角色 ${roleValue}`;
+}
+
+function dashboardOrderStatus(status) {
+  const map = {
+    0: '待支付',
+    1: '已支付',
+    2: '处理中',
+    3: '已完成',
+    4: '已取消',
+    5: '已退款'
+  };
+  return map[Number(status)] || status || '-';
 }
 
 function imageUrl(path) {
@@ -373,6 +775,22 @@ async function sendCode() {
   }
 }
 
+async function applyLoginSession(data, options = {}) {
+  token.value = data.token;
+  role.value = data.role;
+  user.value = data;
+  localStorage.setItem('token', data.token);
+  localStorage.setItem('role', data.role);
+  localStorage.setItem('user', JSON.stringify(data));
+  currentView.value = 'dashboard';
+  activeMenu.value = options.activeMenu || 'wallet';
+  loginError.value = '';
+
+  if (!options.skipFetch) {
+    await fetchData();
+  }
+}
+
 async function login() {
   if (!mobile.value) {
     loginError.value = '请输入手机号';
@@ -391,16 +809,32 @@ async function login() {
       payload.inviteCode = inviteContext.value.mobile;
     }
     const data = unwrap(await api.post('/auth/login', payload));
-    token.value = data.token;
-    role.value = data.role;
-    user.value = data;
-    localStorage.setItem('token', data.token);
-    localStorage.setItem('role', data.role);
-    localStorage.setItem('user', JSON.stringify(data));
-    currentView.value = 'dashboard';
-    activeMenu.value = 'wallet';
-    loginError.value = '';
-    await fetchData();
+    await applyLoginSession(data);
+  } catch (error) {
+    loginError.value = errorMessage(error, '登录失败');
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function passwordLogin() {
+  if (!account.value.trim()) {
+    loginError.value = '请输入账号';
+    return;
+  }
+  if (!password.value) {
+    loginError.value = '请输入密码';
+    return;
+  }
+
+  loading.value = true;
+  try {
+    const data = unwrap(await api.post('/auth/login', {
+      username: account.value.trim(),
+      password: password.value
+    }));
+    await applyLoginSession(data, { activeMenu: Number(data.role) >= 9 ? 'admin' : 'wallet' });
+    password.value = '';
   } catch (error) {
     loginError.value = errorMessage(error, '登录失败');
   } finally {
@@ -413,7 +847,7 @@ async function fetchData() {
 
   await Promise.allSettled([loadWallet(), loadTeam()]);
   if (isAdmin.value) {
-    await Promise.allSettled([loadPolicies(), loadProducts(), loadAdminUsers(), loadFinanceAdmin()]);
+    await Promise.allSettled([loadDashboard(), loadPolicies(), loadSystemConfigs(), loadProducts(), loadAdminUsers(), loadAdminOrders(), loadFinanceAdmin()]);
   }
 }
 
@@ -526,6 +960,39 @@ async function savePolicy(item) {
     policyMessage.value = errorMessage(error, '配置更新失败');
   } finally {
     policySaving.value = false;
+  }
+}
+
+async function loadSystemConfigs() {
+  const keys = systemConfigGroups.flatMap((group) => group.items.map((item) => item.key));
+  const entries = await Promise.all(
+    keys.map(async (key) => {
+      const data = unwrap(await api.get(`/admin/system-config/${key}`, { headers: authHeaders() }));
+      return [key, data.configValue];
+    })
+  );
+  systemConfigs.value = Object.fromEntries(entries);
+}
+
+async function saveSystemConfig(item) {
+  systemConfigSaving.value = item.key;
+  systemConfigMessage.value = '';
+  try {
+    const data = unwrap(await api.put(
+      '/admin/system-config',
+      {
+        configKey: item.key,
+        configValue: systemConfigs.value[item.key] ?? '',
+        description: item.description
+      },
+      { headers: authHeaders() }
+    ));
+    systemConfigMessage.value = data?.message || `${item.label} 已保存`;
+    await loadSystemConfigs();
+  } catch (error) {
+    systemConfigMessage.value = errorMessage(error, '系统配置保存失败');
+  } finally {
+    systemConfigSaving.value = '';
   }
 }
 
@@ -652,7 +1119,14 @@ async function copyInviteLink() {
 }
 
 function showPosterSaveTip() {
+  bindResult.value = { code: 200, message: '当前海报可直接截图保存；后续可接入一键生成图片' };
+  return;
   bindResult.value = { code: 200, message: '当前版本已生成海报样式，可截图或保存小程序海报转发' };
+}
+
+function viewInviteFriends() {
+  bindResult.value = { code: 200, message: '可在团队列表查看后续绑定关系' };
+  switchMenu('team');
 }
 
 async function loadProducts() {
@@ -802,6 +1276,210 @@ function searchAdminUsers() {
   loadAdminUsers();
 }
 
+async function loadAdminOrders() {
+  if (!isAdmin.value) return;
+  orderLoading.value = true;
+  orderMessage.value = '';
+  try {
+    const data = unwrap(
+      await api.get('/admin/orders', {
+        headers: authHeaders(),
+        params: { ...orderPage.value, ...cleanParams(orderFilters.value) }
+      })
+    );
+    adminOrders.value = data.records || [];
+    orderTotal.value = data.total || 0;
+    orderPage.value.page = Number(data.page || orderPage.value.page);
+    orderPage.value.size = Number(data.size || orderPage.value.size);
+  } catch (error) {
+    orderMessage.value = errorMessage(error, '订单列表加载失败');
+  } finally {
+    orderLoading.value = false;
+  }
+}
+
+function searchAdminOrders() {
+  orderPage.value.page = 1;
+  loadAdminOrders();
+}
+
+async function loadAuditLogs() {
+  if (!isAdmin.value) return;
+  auditLogLoading.value = true;
+  auditLogMessage.value = '';
+  try {
+    const data = unwrap(
+      await api.get('/admin/audit-logs', {
+        headers: authHeaders(),
+        params: { ...auditLogPage.value, ...cleanParams(auditLogFilters.value) }
+      })
+    );
+    auditLogs.value = data.records || [];
+    auditLogTotal.value = data.total || 0;
+    auditLogPage.value.page = Number(data.page || auditLogPage.value.page);
+    auditLogPage.value.size = Number(data.size || auditLogPage.value.size);
+  } catch (error) {
+    auditLogMessage.value = errorMessage(error, '审计日志加载失败');
+  } finally {
+    auditLogLoading.value = false;
+  }
+}
+
+function searchAuditLogs() {
+  auditLogPage.value.page = 1;
+  loadAuditLogs();
+}
+
+async function loadSupportMessages() {
+  supportLoading.value = true;
+  supportMessage.value = '';
+  try {
+    supportMessages.value = unwrap(await api.get('/support/messages', { headers: authHeaders() })) || [];
+  } catch (error) {
+    supportMessage.value = errorMessage(error, '客服消息加载失败');
+  } finally {
+    supportLoading.value = false;
+  }
+}
+
+async function sendSupportMessage() {
+  const content = supportInput.value.trim();
+  if (!content) return;
+  supportLoading.value = true;
+  supportMessage.value = '';
+  try {
+    const data = unwrap(await api.post('/support/messages', { messageType: 'TEXT', content }, { headers: authHeaders() }));
+    supportMessages.value = [...supportMessages.value, data];
+    supportInput.value = '';
+  } catch (error) {
+    supportMessage.value = errorMessage(error, '客服消息发送失败');
+  } finally {
+    supportLoading.value = false;
+  }
+}
+
+async function loadAdminSupportMessages() {
+  if (!isAdmin.value) return;
+  adminSupportLoading.value = true;
+  adminSupportMessage.value = '';
+  try {
+    const data = unwrap(await api.get('/support/admin/messages', {
+      headers: authHeaders(),
+      params: { ...adminSupportPage.value, ...cleanParams(adminSupportFilters.value) }
+    }));
+    adminSupportMessages.value = data.records || [];
+    adminSupportTotal.value = data.total || 0;
+    adminSupportPage.value.page = Number(data.page || adminSupportPage.value.page);
+    adminSupportPage.value.size = Number(data.size || adminSupportPage.value.size);
+  } catch (error) {
+    adminSupportMessage.value = errorMessage(error, '客服后台加载失败');
+  } finally {
+    adminSupportLoading.value = false;
+  }
+}
+
+function searchAdminSupportMessages() {
+  adminSupportPage.value.page = 1;
+  loadAdminSupportMessages();
+}
+
+async function replySupportMessage() {
+  if (!adminSupportReplyUserId.value || !adminSupportReplyText.value.trim()) return;
+  adminSupportLoading.value = true;
+  adminSupportMessage.value = '';
+  try {
+    await api.post(
+      `/support/admin/messages/${adminSupportReplyUserId.value}/reply`,
+      { messageType: 'TEXT', content: adminSupportReplyText.value.trim() },
+      { headers: authHeaders() }
+    );
+    adminSupportReplyText.value = '';
+    await loadAdminSupportMessages();
+  } catch (error) {
+    adminSupportMessage.value = errorMessage(error, '客服回复失败');
+  } finally {
+    adminSupportLoading.value = false;
+  }
+}
+
+async function loadNotifications() {
+  notificationLoading.value = true;
+  notificationMessage.value = '';
+  try {
+    const [list, unread] = await Promise.all([
+      api.get('/notifications/list', { headers: authHeaders(), params: { ...notificationPage.value } }),
+      api.get('/notifications/unread-count', { headers: authHeaders() })
+    ]);
+    const data = unwrap(list);
+    notifications.value = data.records || [];
+    notificationTotal.value = data.total || 0;
+    notificationPage.value.page = Number(data.page || notificationPage.value.page);
+    notificationPage.value.size = Number(data.size || notificationPage.value.size);
+    notificationUnread.value = unwrap(unread)?.count || 0;
+  } catch (error) {
+    notificationMessage.value = errorMessage(error, '通知加载失败');
+  } finally {
+    notificationLoading.value = false;
+  }
+}
+
+async function markNotificationRead(item) {
+  if (!item?.id || item.isRead === 1) return;
+  await api.put(`/notifications/${item.id}/read`, {}, { headers: authHeaders() });
+  item.isRead = 1;
+  notificationUnread.value = Math.max(0, Number(notificationUnread.value || 0) - 1);
+}
+
+async function markAllNotificationsRead() {
+  await api.put('/notifications/read-all', {}, { headers: authHeaders() });
+  notifications.value.forEach((item) => { item.isRead = 1; });
+  notificationUnread.value = 0;
+}
+
+async function loadAdminNotifications() {
+  if (!isAdmin.value) return;
+  adminNotificationLoading.value = true;
+  adminNotificationMessage.value = '';
+  try {
+    const data = unwrap(await api.get('/notifications/admin/list', {
+      headers: authHeaders(),
+      params: { ...adminNotificationPage.value, ...cleanParams(adminNotificationFilters.value) }
+    }));
+    adminNotifications.value = data.records || [];
+    adminNotificationTotal.value = data.total || 0;
+    adminNotificationPage.value.page = Number(data.page || adminNotificationPage.value.page);
+    adminNotificationPage.value.size = Number(data.size || adminNotificationPage.value.size);
+  } catch (error) {
+    adminNotificationMessage.value = errorMessage(error, '公告列表加载失败');
+  } finally {
+    adminNotificationLoading.value = false;
+  }
+}
+
+function searchAdminNotifications() {
+  adminNotificationPage.value.page = 1;
+  loadAdminNotifications();
+}
+
+async function broadcastNotification() {
+  if (!notificationForm.value.title.trim() || !notificationForm.value.content.trim()) return;
+  adminNotificationLoading.value = true;
+  adminNotificationMessage.value = '';
+  try {
+    const data = unwrap(await api.post('/notifications/admin/broadcast', {
+      title: notificationForm.value.title.trim(),
+      content: notificationForm.value.content.trim()
+    }, { headers: authHeaders() }));
+    adminNotificationMessage.value = `公告已发送给 ${data.targetCount || 0} 位会员`;
+    notificationForm.value = { title: '', content: '' };
+    await Promise.all([loadAdminNotifications(), loadNotifications()]);
+  } catch (error) {
+    adminNotificationMessage.value = errorMessage(error, '公告发送失败');
+  } finally {
+    adminNotificationLoading.value = false;
+  }
+}
+
 async function updateUser(userItem, patch) {
   userMessage.value = '';
   try {
@@ -811,6 +1489,30 @@ async function updateUser(userItem, patch) {
   } catch (error) {
     userMessage.value = errorMessage(error, '人员信息更新失败');
     await loadAdminUsers();
+  }
+}
+
+async function loadDashboard() {
+  if (!isAdmin.value) return;
+  dashboardLoading.value = true;
+  dashboardMessage.value = '';
+  try {
+    const [overview, growth, revenue, profit, orders] = await Promise.all([
+      api.get('/admin/dashboard/overview', { headers: authHeaders() }),
+      api.get('/admin/dashboard/user-growth', { headers: authHeaders(), params: { days: 14 } }),
+      api.get('/admin/dashboard/revenue-trend', { headers: authHeaders(), params: { days: 14 } }),
+      api.get('/admin/dashboard/profit-distribution', { headers: authHeaders() }),
+      api.get('/admin/dashboard/recent-orders', { headers: authHeaders(), params: { limit: 8 } })
+    ]);
+    dashboardOverview.value = unwrap(overview) || {};
+    dashboardUserGrowth.value = unwrap(growth) || [];
+    dashboardRevenueTrend.value = unwrap(revenue) || [];
+    dashboardProfitDistribution.value = unwrap(profit) || [];
+    dashboardRecentOrders.value = unwrap(orders) || [];
+  } catch (error) {
+    dashboardMessage.value = errorMessage(error, '经营概览加载失败');
+  } finally {
+    dashboardLoading.value = false;
   }
 }
 
@@ -865,6 +1567,14 @@ function exportUsers() {
   downloadFile('/admin/users/export', userFilters.value, 'users.csv');
 }
 
+function exportOrders() {
+  downloadFile('/admin/orders/export', orderFilters.value, 'orders.csv');
+}
+
+function exportAuditLogs() {
+  downloadFile('/admin/audit-logs/export', auditLogFilters.value, 'audit-logs.csv');
+}
+
 function exportWithdrawals() {
   downloadFile('/admin/finance/withdrawals/export', withdrawalFilters.value, 'withdrawals.csv');
 }
@@ -913,10 +1623,21 @@ function switchMenu(menu) {
   activeMenu.value = menu;
   if (menu === 'shop') loadPublicProducts();
   if (menu === 'invite') loadInviteQr();
+  if (menu === 'campaigns') loadPartnerCampaigns();
+  if (menu === 'support') loadSupportMessages();
+  if (menu === 'notifications') loadNotifications();
+  if (menu === 'dashboardAdmin') loadDashboard();
   if (menu === 'products') loadProducts();
   if (menu === 'users') loadAdminUsers();
+  if (menu === 'orders') loadAdminOrders();
+  if (menu === 'auditLogs') loadAuditLogs();
+  if (menu === 'supportAdmin') loadAdminSupportMessages();
+  if (menu === 'notificationAdmin') loadAdminNotifications();
   if (menu === 'financeAdmin') loadFinanceAdmin();
-  if (menu === 'admin') loadPolicies();
+  if (menu === 'admin') {
+    loadPolicies();
+    loadSystemConfigs();
+  }
 }
 
 function logout() {
@@ -930,12 +1651,18 @@ function logout() {
   policies.value = {};
   inviteQrData.value = null;
   inviteQrImage.value = '';
+  partnerCampaigns.value = [];
+  partnerCampaignSignups.value = [];
+  partnerCampaignQrImage.value = '';
   joinMessage.value = '';
   withdrawalMessage.value = '';
   localStorage.clear();
   currentView.value = 'home';
+  loginMode.value = 'sms';
   mobile.value = '';
   code.value = '';
+  account.value = '';
+  password.value = '';
   countdown.value = 0;
   loginError.value = '';
   inviteLockMessage.value = '';
@@ -969,6 +1696,11 @@ api.interceptors.response.use(
 
 onMounted(() => {
   generatePublicPosterQr();
+  if (campaignCode.value) {
+    currentView.value = 'campaign';
+    loadPublicCampaign();
+    return;
+  }
   if (token.value) {
     currentView.value = 'dashboard';
     fetchData();
@@ -1074,6 +1806,158 @@ onUnmounted(clearCodeTimer);
       </section>
     </div>
 
+    <div v-else-if="currentView === 'campaign'" class="campaign-public">
+      <template v-if="publicCampaign">
+        <header class="campaign-appbar">
+          <button v-if="campaignH5Tab === 'confirm' || campaignH5Tab === 'success'" class="campaign-back" @click="switchCampaignTab('home')">‹</button>
+          <div>
+            <b>{{ campaignH5Tab === 'card' ? '卡项' : campaignH5Tab === 'confirm' ? '确认订单' : campaignH5Tab === 'success' ? '报名成功' : campaignH5Tab === 'mine' ? '我的' : publicCampaign.campaign.storeName }}</b>
+            <span v-if="campaignH5Tab === 'home'">{{ publicCampaign.campaign.city || '到店体验' }}</span>
+          </div>
+          <button class="campaign-mini" @click="copyPublicCampaignLink">分享</button>
+        </header>
+
+        <main class="campaign-phone-shell">
+          <section v-if="campaignH5Tab === 'home'" class="campaign-home">
+            <div class="campaign-cover">
+              <img class="campaign-cover-img" :src="imageUrl(publicCampaign.campaign.posterImage || sharePosterUrl)" alt="" />
+              <div class="campaign-cover-mask"></div>
+              <div class="campaign-store-float">
+                <div><span>药师祖庭合作门店</span><h1>{{ publicCampaign.campaign.storeName }}</h1></div>
+                <button @click="callCampaignStore">电话咨询</button>
+              </div>
+            </div>
+            <div class="campaign-shop-card">
+              <div><h2>{{ publicCampaign.campaign.storeName }}</h2><p>{{ publicCampaign.campaign.address || publicCampaign.campaign.city || '报名后联系门店' }}</p></div>
+              <div class="campaign-contact"><span>{{ publicCampaign.campaign.city || '同城门店' }}</span><b>{{ publicCampaign.campaign.phone || '到店咨询' }}</b></div>
+            </div>
+            <section class="campaign-sale">
+              <span class="campaign-sale-kicker">限时拓客体验</span>
+              <h2>全民健康中国行</h2>
+              <h3>{{ publicCampaign.campaign.title || '经络调理体质体验免费做' }}</h3>
+              <p>{{ publicCampaign.campaign.subtitle || '到店体验经络仪调理 + 草本养护方案，预约后到店核销' }}</p>
+              <div class="campaign-price-row"><div><span>体验价</span><b>¥{{ formatMoney(publicCampaign.campaign.price) }}</b></div><em>已报名 {{ publicCampaign.campaign.signedCount || 0 }} 人</em></div>
+              <div class="campaign-progress"><i :style="{ width: campaignProgressWidth() }"></i></div>
+              <div class="campaign-trust"><span v-if="campaignRemaining() !== null">剩余 {{ campaignRemaining() }} 个名额</span><span>到店领取</span><span>专人接待</span></div>
+            </section>
+            <section class="campaign-benefits">
+              <div><b>活动权益</b><p>{{ publicCampaign.campaign.benefitText }}</p></div>
+              <div><b>到店规则</b><p>{{ publicCampaign.campaign.giftText }}</p></div>
+              <div><b>分享奖励</b><p>{{ publicCampaign.campaign.shareRewardText }}</p></div>
+            </section>
+          </section>
+
+          <section v-if="campaignH5Tab === 'card'" class="campaign-card-page">
+            <div class="campaign-notice">最新订单：{{ publicCampaign.ownerNickname || '门店客户' }} 刚刚已报名</div>
+            <article class="campaign-item-card" @click="openCampaignOrder">
+              <img :src="imageUrl(publicCampaign.campaign.posterImage || sharePosterUrl)" alt="" />
+              <div>
+                <h2>{{ publicCampaign.campaign.title }}</h2>
+                <p>{{ publicCampaign.campaign.subtitle || '经络仪检测 + 草本养护 + 门店健康建议' }}</p>
+                <span>适用门店：{{ publicCampaign.campaign.storeName }}</span>
+                <span>有效期：报名后 7 天内到店</span>
+                <div class="campaign-item-bottom"><b>¥{{ formatMoney(publicCampaign.campaign.price) }}</b><button @click="openCampaignOrder">立即领取</button></div>
+              </div>
+            </article>
+          </section>
+
+          <section v-if="campaignH5Tab === 'confirm'" class="campaign-confirm">
+            <div class="campaign-order-box">
+              <p><b>配送方式：</b>到店领取</p><p><b>服务门店：</b>{{ publicCampaign.campaign.storeName }}</p>
+              <p><b>门店电话：</b>{{ publicCampaign.campaign.phone || '到店咨询' }}</p><p><b>门店地址：</b>{{ publicCampaign.campaign.address || publicCampaign.campaign.city || '报名后联系门店' }}</p>
+            </div>
+            <div class="campaign-order-product">
+              <img :src="imageUrl(publicCampaign.campaign.posterImage || sharePosterUrl)" alt="" />
+              <div><b>{{ publicCampaign.campaign.title }}</b><span>×1</span></div><strong>¥{{ formatMoney(publicCampaign.campaign.price) }}</strong>
+            </div>
+            <div class="campaign-order-box">
+              <label><span>手机号</span><input v-model="campaignSignupForm.mobile" type="tel" maxlength="11" placeholder="请输入手机号" /></label>
+              <label><span>昵称</span><input v-model="campaignSignupForm.nickname" placeholder="可选" /></label>
+              <label><span>订单备注</span><textarea v-model="campaignSignupForm.remark" placeholder="选填，可填写预约时间或到店需求"></textarea></label>
+            </div>
+          </section>
+
+          <section v-if="campaignH5Tab === 'success'" class="campaign-success">
+            <div class="campaign-success-card"><span>报名成功</span><h2>你的核销券已生成</h2><strong>{{ campaignSignupResult?.voucherCode || 'HX' }}</strong><p>到店出示核销码即可体验，建议 7 天内电话预约到店。</p></div>
+            <div class="campaign-share-card"><img v-if="publicCampaignQrImage" :src="publicCampaignQrImage" alt="活动二维码" /><div><b>分享给好友</b><p>好友报名后，可到店领取额外体验权益。</p></div></div>
+            <div class="campaign-success-actions"><button class="btn-main" @click="copyPublicCampaignLink">复制活动链接</button><button class="btn-main outline" @click="callCampaignStore">电话联系门店</button></div>
+          </section>
+
+          <section v-if="campaignH5Tab === 'mine'" class="campaign-mine">
+            <div class="campaign-mine-head"><img :src="logoUrl" alt="" /><div><h2>{{ campaignSignupForm.nickname || campaignSignupForm.mobile || '活动客户' }}</h2><p>注册用户</p></div><button @click="goLogin">登录</button></div>
+            <div class="campaign-status-grid"><span>全部</span><span>待到店</span><span>待核销</span><span>已核销</span></div>
+            <div class="campaign-mine-list"><button @click="switchCampaignTab('success')">我的核销券</button><button @click="copyPublicCampaignLink">我的推广码</button><button>我的好友</button><button @click="callCampaignStore">门店信息</button></div>
+          </section>
+          <div v-if="campaignSignupMessage" class="campaign-toast" :class="{ fail: isFailureMessage(campaignSignupMessage) }">{{ campaignSignupMessage }}</div>
+        </main>
+
+        <footer v-if="campaignH5Tab === 'confirm'" class="campaign-submitbar"><span>共1件商品</span><b>合计：¥{{ formatMoney(publicCampaign.campaign.price) }}</b><button @click="submitCampaignSignup" :disabled="campaignSignupLoading">{{ campaignSignupLoading ? '提交中' : '提交订单' }}</button></footer>
+        <footer v-else class="campaign-tabbar"><button :class="{ active: campaignH5Tab === 'home' }" @click="switchCampaignTab('home')"><span>⌂</span>首页</button><button :class="{ active: campaignH5Tab === 'card' }" @click="switchCampaignTab('card')"><span>▤</span>卡项</button><button :class="{ active: campaignH5Tab === 'mine' }" @click="switchCampaignTab('mine')"><span>♙</span>我的</button></footer>
+        <button v-if="campaignH5Tab === 'home'" class="campaign-kill-btn" @click="openCampaignOrder">立即秒杀</button>
+      </template>
+      <header class="campaign-topbar">
+        <div><b>{{ publicCampaign?.campaign?.storeName || '药师祖庭合作门店' }}</b><span>{{ publicCampaign?.campaign?.city || '到店体验' }}</span></div>
+        <button @click="goLogin">登录 / 注册</button>
+      </header>
+
+      <section v-if="publicCampaign" class="campaign-hero">
+        <div class="campaign-store-card">
+          <span class="campaign-kicker">合作伙伴活动</span>
+          <h1>{{ publicCampaign.campaign.title }}</h1>
+          <p>{{ publicCampaign.campaign.subtitle || '经络仪 + 草本蕴养霜组合体验，报名后到店核销' }}</p>
+          <div class="campaign-store-lines">
+            <span>门店：{{ publicCampaign.campaign.storeName }}</span>
+            <span>电话：{{ publicCampaign.campaign.phone || '到店咨询' }}</span>
+            <span>地址：{{ publicCampaign.campaign.address || publicCampaign.campaign.city || '报名后联系门店' }}</span>
+          </div>
+        </div>
+        <div class="campaign-price-card">
+          <span>报名价</span>
+          <b>¥{{ formatMoney(publicCampaign.campaign.price) }}</b>
+          <em v-if="publicCampaign.campaign.quota">已报名 {{ publicCampaign.campaign.signedCount || 0 }} / {{ publicCampaign.campaign.quota }}</em>
+          <em v-else>已报名 {{ publicCampaign.campaign.signedCount || 0 }} 位</em>
+        </div>
+      </section>
+
+      <section v-if="publicCampaign" class="campaign-content">
+        <div class="campaign-panel">
+          <h2>活动权益</h2>
+          <p>{{ publicCampaign.campaign.benefitText }}</p>
+        </div>
+        <div class="campaign-panel">
+          <h2>到店领取/体验</h2>
+          <p>{{ publicCampaign.campaign.giftText }}</p>
+        </div>
+        <div class="campaign-panel">
+          <h2>分享奖励</h2>
+          <p>{{ publicCampaign.campaign.shareRewardText }}</p>
+        </div>
+        <div class="campaign-panel campaign-qr-panel">
+          <div>
+            <h2>活动二维码</h2>
+            <p>合作伙伴可把此链接或二维码做成海报，客户扫码后进入报名页。</p>
+          </div>
+          <img v-if="publicCampaignQrImage" :src="publicCampaignQrImage" alt="活动二维码" />
+        </div>
+      </section>
+
+      <section v-if="publicCampaign" class="campaign-signup">
+        <h2>立即报名</h2>
+        <div class="form-grid">
+          <label><span>手机号</span><input v-model="campaignSignupForm.mobile" type="tel" maxlength="11" placeholder="请输入手机号" /></label>
+          <label><span>昵称</span><input v-model="campaignSignupForm.nickname" placeholder="可选" /></label>
+          <label class="span-2"><span>备注</span><textarea v-model="campaignSignupForm.remark" placeholder="可填写预约时间或到店需求"></textarea></label>
+          <button class="btn-main span-2" @click="submitCampaignSignup" :disabled="campaignSignupLoading">{{ campaignSignupLoading ? '提交中...' : '提交报名' }}</button>
+        </div>
+        <div v-if="campaignSignupMessage" class="bind-feedback" :class="{ ok: !isFailureMessage(campaignSignupMessage), fail: isFailureMessage(campaignSignupMessage) }">{{ campaignSignupMessage }}</div>
+      </section>
+
+      <section v-else class="campaign-signup">
+        <h2>活动加载中</h2>
+        <div v-if="campaignSignupMessage" class="bind-feedback fail">{{ campaignSignupMessage }}</div>
+      </section>
+    </div>
+
     <div v-else-if="currentView === 'login'" class="login-page">
       <div class="login-bg"></div>
 
@@ -1089,36 +1973,57 @@ onUnmounted(clearCodeTimer);
         <div class="login-card">
           <button class="back-home" @click="goHome">返回首页</button>
           <div class="card-tabs">
-            <span class="tab active">手机登录</span>
+            <button class="tab" :class="{ active: loginMode === 'sms' }" @click="loginMode = 'sms'; loginError = ''">手机登录</button>
+            <button class="tab" :class="{ active: loginMode === 'password' }" @click="loginMode = 'password'; loginError = ''">账号密码登录</button>
           </div>
           <div v-if="inviteContext.parentId || inviteContext.mobile" class="invite-hint">
             <b>推荐注册</b>
             <span>推荐人：{{ inviterName }}<template v-if="inviteContext.parentId"> · ID {{ inviteContext.parentId }}</template></span>
             <em v-if="inviteLockMessage">{{ inviteLockMessage }}</em>
           </div>
-          <div class="input-group">
-            <label>手机号</label>
-            <div class="input-box">
-              <input v-model="mobile" type="tel" placeholder="请输入手机号" maxlength="11" />
+          <template v-if="loginMode === 'sms'">
+            <div class="input-group">
+              <label>手机号</label>
+              <div class="input-box">
+                <input v-model="mobile" type="tel" placeholder="请输入手机号" maxlength="11" />
+              </div>
             </div>
-          </div>
-          <div class="input-group">
-            <label>验证码</label>
-            <div class="input-box code-box">
-              <input v-model="code" type="text" placeholder="验证码" maxlength="6" />
-              <button class="code-btn" @click="sendCode" :disabled="countdown > 0">
-                {{ countdown > 0 ? `${countdown}s` : '获取验证码' }}
-              </button>
+            <div class="input-group">
+              <label>验证码</label>
+              <div class="input-box code-box">
+                <input v-model="code" type="text" placeholder="验证码" maxlength="6" />
+                <button class="code-btn" @click="sendCode" :disabled="countdown > 0">
+                  {{ countdown > 0 ? `${countdown}s` : '获取验证码' }}
+                </button>
+              </div>
             </div>
-          </div>
+          </template>
+          <template v-else>
+            <div class="input-group">
+              <label>账号</label>
+              <div class="input-box">
+                <input v-model.trim="account" type="text" placeholder="请输入账号" autocomplete="username" />
+              </div>
+            </div>
+            <div class="input-group">
+              <label>密码</label>
+              <div class="input-box">
+                <input v-model="password" type="password" placeholder="请输入密码" autocomplete="current-password" @keyup.enter="passwordLogin" />
+              </div>
+            </div>
+          </template>
           <div v-if="loginError" class="error-tip">{{ loginError }}</div>
-          <button class="submit-btn" @click="login" :disabled="loading">
+          <button v-if="loginMode === 'sms'" class="submit-btn" @click="login" :disabled="loading">
+            {{ loading ? '登录中...' : '登录' }}
+          </button>
+          <button v-else class="submit-btn" @click="passwordLogin" :disabled="loading">
             {{ loading ? '登录中...' : '登录' }}
           </button>
           <div class="quick-login">
             <span>快速测试</span>
             <button class="quick-tag" @click="mobile = '13800000000'">管理员</button>
             <button class="quick-tag" @click="mobile = '13900139002'">会员</button>
+            <button class="quick-tag" @click="loginMode = 'password'; account = 'admin'; password = 'admincj'; loginError = ''">超管</button>
           </div>
         </div>
         <div class="login-footer">药师祖庭 © 2026</div>
@@ -1158,9 +2063,34 @@ onUnmounted(clearCodeTimer);
             <button class="menu-item" :class="{ active: activeMenu === 'invite' }" @click="switchMenu('invite')">
               <span class="mi-icon">码</span> 邀请会员
             </button>
+            <button v-if="canManageCampaigns" class="menu-item" :class="{ active: activeMenu === 'campaigns' }" @click="switchMenu('campaigns')">
+              <span class="mi-icon">裂</span> 裂变活动
+            </button>
+            <button class="menu-item" :class="{ active: activeMenu === 'support' }" @click="switchMenu('support')">
+              <span class="mi-icon">客</span> 客服中心
+            </button>
+            <button class="menu-item" :class="{ active: activeMenu === 'notifications' }" @click="switchMenu('notifications')">
+              <span class="mi-icon">告</span> 通知公告
+              <em v-if="notificationUnread" class="menu-badge">{{ notificationUnread }}</em>
+            </button>
           </div>
           <div v-if="isAdmin" class="menu-group">
             <div class="menu-label">管理</div>
+            <button class="menu-item" :class="{ active: activeMenu === 'dashboardAdmin' }" @click="switchMenu('dashboardAdmin')">
+              <span class="mi-icon">览</span> 经营概览
+            </button>
+            <button class="menu-item" :class="{ active: activeMenu === 'orders' }" @click="switchMenu('orders')">
+              <span class="mi-icon">单</span> 订单管理
+            </button>
+            <button class="menu-item" :class="{ active: activeMenu === 'auditLogs' }" @click="switchMenu('auditLogs')">
+              <span class="mi-icon">审</span> 审计日志
+            </button>
+            <button class="menu-item" :class="{ active: activeMenu === 'supportAdmin' }" @click="switchMenu('supportAdmin')">
+              <span class="mi-icon">讯</span> 客服消息
+            </button>
+            <button class="menu-item" :class="{ active: activeMenu === 'notificationAdmin' }" @click="switchMenu('notificationAdmin')">
+              <span class="mi-icon">告</span> 公告发布
+            </button>
             <button class="menu-item" :class="{ active: activeMenu === 'products' }" @click="switchMenu('products')">
               <span class="mi-icon">品</span> 商品管理
             </button>
@@ -1347,8 +2277,54 @@ onUnmounted(clearCodeTimer);
             <p>分享邀请链接并锁定上下级关系</p>
           </div>
           <div class="panel-card">
-            <div class="pc-header"><h3>我的邀请码</h3></div>
-            <div v-if="inviteQrData" class="invite-block">
+            <div class="pc-header"><h3>我的推广码</h3><span class="tag-count">裂变海报</span></div>
+            <div v-if="inviteQrData" class="invite-block invite-upgrade-grid">
+              <article class="invite-poster-preview">
+                <div class="invite-poster-alert">好友报名 · 到店加赠</div>
+                <div class="invite-poster-brand">
+                  <img :src="logoUrl" alt="药师祖庭" />
+                  <div><b>药师祖庭</b><span>三通调理养生馆</span></div>
+                </div>
+                <div class="invite-poster-title"><span>分享好友</span><strong>一起领体验</strong></div>
+                <p class="invite-poster-subtitle">新会员扫码注册，系统自动绑定推荐关系；到店出示核销券即可参与门店活动。</p>
+                <div class="invite-benefit-grid">
+                  <span>新人体验券</span>
+                  <span>好友报名提醒</span>
+                  <span>我的推广码</span>
+                  <span>我的核销券</span>
+                </div>
+                <div class="invite-poster-qr-card">
+                  <div class="invite-qr-shell">
+                    <img v-if="inviteQrImage" :src="inviteQrImage" alt="邀请二维码" />
+                    <span v-else>QR</span>
+                  </div>
+                  <div class="invite-poster-meta">
+                    <b>长按识别二维码</b>
+                    <span>邀请人：{{ inviteQrData.parentNickname || '药师祖庭会员' }}</span>
+                    <span>ID：{{ inviteQrData.parentId }}</span>
+                  </div>
+                </div>
+                <p class="invite-poster-disclaimer">本服务为日常康养体验，不替代医疗诊疗。</p>
+              </article>
+
+              <aside class="invite-action-panel">
+                <span class="invite-action-kicker">推广动作</span>
+                <h3>让推广码真正帮你拓客</h3>
+                <p>复制链接或截图海报发给好友，新会员进入后会自动带入你的推荐关系。</p>
+                <div class="invite-action-list">
+                  <div class="invite-action-item"><b>1</b><span>发给好友</span><em>微信、朋友圈、门店社群都可转发</em></div>
+                  <div class="invite-action-item"><b>2</b><span>好友扫码注册</span><em>手机号登录时自动锁定推荐关系</em></div>
+                  <div class="invite-action-item"><b>3</b><span>后续跟进</span><em>在团队列表查看已绑定客户</em></div>
+                </div>
+                <code class="invite-link-box">{{ inviteQrData.inviteUrl }}</code>
+                <div class="invite-action-buttons">
+                  <button class="btn-main" @click="copyInviteLink">复制链接</button>
+                  <button class="btn-main outline" type="button" @click="showPosterSaveTip">保存海报</button>
+                  <button class="btn-main outline" type="button" @click="viewInviteFriends">查看好友</button>
+                </div>
+              </aside>
+            </div>
+            <div v-if="false && inviteQrData" class="invite-block">
               <div class="qr-card share-card">
                 <img class="qr-logo" :src="logoUrl" alt="药师祖庭" />
                 <p class="qr-title">扫码加入药师祖庭</p>
@@ -1368,7 +2344,7 @@ onUnmounted(clearCodeTimer);
                 </div>
               </div>
             </div>
-            <div v-else class="empty-box brand-empty">
+            <div v-if="!inviteQrData" class="empty-box brand-empty">
               <img :src="logoUrl" alt="" />
               <span>暂无邀请信息</span>
             </div>
@@ -1385,6 +2361,502 @@ onUnmounted(clearCodeTimer);
             <div class="bind-row">
               <input v-model="bindingMobile" type="tel" placeholder="新会员手机号" maxlength="11" />
               <button class="btn-main outline" @click="lockParentBind" :disabled="bindingLoading">锁定下级</button>
+            </div>
+          </div>
+        </section>
+
+        <section v-if="activeMenu === 'campaigns' && canManageCampaigns">
+          <div class="page-top">
+            <div class="page-brand"><img :src="logoUrl" alt="" /><span>合作伙伴工具</span></div>
+            <h2>裂变活动</h2>
+            <p>为合作伙伴生成自己的低门槛活动页、推广码、报名记录和到店核销码</p>
+          </div>
+
+          <div v-if="partnerCampaignMessage" class="bind-feedback admin-message" :class="{ ok: !isFailureMessage(partnerCampaignMessage), fail: isFailureMessage(partnerCampaignMessage) }">{{ partnerCampaignMessage }}</div>
+
+          <div class="admin-grid two">
+            <div class="panel-card">
+              <div class="pc-header">
+                <h3>{{ partnerCampaignForm.id ? '编辑活动' : '创建活动' }}</h3>
+                <button class="text-btn" @click="resetCampaignForm">新建</button>
+              </div>
+              <div class="campaign-template-row">
+                <button v-for="template in campaignTemplates" :key="template.name" type="button" @click="applyCampaignTemplate(template)">
+                  {{ template.name }}
+                </button>
+              </div>
+              <div class="form-grid product-form">
+                <label><span>门店名称</span><input v-model="partnerCampaignForm.storeName" placeholder="例如：正美馆" /></label>
+                <label><span>城市</span><input v-model="partnerCampaignForm.city" placeholder="例如：郑州" /></label>
+                <label><span>门店电话</span><input v-model="partnerCampaignForm.phone" placeholder="门店电话" /></label>
+                <label><span>活动价格</span><input v-model.number="partnerCampaignForm.price" type="number" min="0" step="0.01" /></label>
+                <label class="span-2"><span>门店地址</span><input v-model="partnerCampaignForm.address" placeholder="到店地址" /></label>
+                <label class="span-2"><span>活动标题</span><input v-model="partnerCampaignForm.title" placeholder="新人到店养护体验" /></label>
+                <label class="span-2"><span>副标题</span><input v-model="partnerCampaignForm.subtitle" placeholder="经络仪 + 草本蕴养霜组合体验" /></label>
+                <label class="span-2"><span>活动权益</span><textarea v-model="partnerCampaignForm.benefitText" placeholder="说明用户报名后获得什么权益"></textarea></label>
+                <label class="span-2"><span>到店领取/体验</span><textarea v-model="partnerCampaignForm.giftText" placeholder="说明到店核销、领取或体验规则"></textarea></label>
+                <label class="span-2"><span>分享奖励</span><textarea v-model="partnerCampaignForm.shareRewardText" placeholder="说明分享好友报名后的奖励"></textarea></label>
+                <label><span>名额</span><input v-model.number="partnerCampaignForm.quota" type="number" min="0" /></label>
+                <label><span>状态</span><select v-model.number="partnerCampaignForm.status"><option :value="1">上架</option><option :value="0">下架</option></select></label>
+                <button class="btn-main span-2" @click="savePartnerCampaign" :disabled="partnerCampaignSaving">{{ partnerCampaignSaving ? '保存中...' : '保存并生成推广码' }}</button>
+              </div>
+            </div>
+
+            <div class="panel-card">
+              <div class="pc-header"><h3>活动推广码</h3><span class="tag-count">{{ partnerCampaigns.length }} 个活动</span></div>
+              <div v-if="partnerCampaignForm.shareCode" class="invite-block">
+                <div class="qr-card share-card">
+                  <img class="qr-logo" :src="logoUrl" alt="药师祖庭" />
+                  <p class="qr-title">{{ partnerCampaignForm.title }}</p>
+                  <div class="qr-meta">
+                    <span>门店: <b>{{ partnerCampaignForm.storeName }}</b></span>
+                    <span>活动码: <b>{{ partnerCampaignForm.shareCode }}</b></span>
+                  </div>
+                  <div class="mini-qr-box">
+                    <img v-if="partnerCampaignQrImage" :src="partnerCampaignQrImage" alt="活动二维码" />
+                    <span v-else>QR</span>
+                  </div>
+                  <p class="qr-hint">客户扫码进入合作伙伴活动页，提交报名后生成核销码</p>
+                  <code class="qr-link">{{ buildCampaignShareUrl(partnerCampaignForm.shareCode) }}</code>
+                  <div class="poster-actions">
+                    <button class="btn-main" @click="copyCampaignLink">复制活动链接</button>
+                    <button class="btn-main outline" @click="loadCampaignSignups">刷新报名</button>
+                  </div>
+                </div>
+              </div>
+              <div v-else class="empty-box brand-empty">
+                <img :src="logoUrl" alt="" />
+                <span>保存活动后生成推广码</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel-card">
+            <div class="pc-header"><h3>我的活动</h3><button class="text-btn" @click="loadPartnerCampaigns">刷新</button></div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>活动</th><th>门店</th><th>价格</th><th>报名</th><th>状态</th><th>操作</th></tr></thead>
+                <tbody>
+                  <tr v-for="entry in partnerCampaigns" :key="entry.campaign.id">
+                    <td>{{ entry.campaign.title }}</td>
+                    <td>{{ entry.campaign.storeName }}</td>
+                    <td>¥{{ formatMoney(entry.campaign.price) }}</td>
+                    <td>{{ entry.campaign.signedCount || 0 }}<template v-if="entry.campaign.quota"> / {{ entry.campaign.quota }}</template></td>
+                    <td><span class="status-pill" :class="{ on: entry.campaign.status === 1, off: entry.campaign.status !== 1 }">{{ entry.campaign.status === 1 ? '上架' : '下架' }}</span></td>
+                    <td><button class="text-btn" @click="selectCampaign(entry)">查看</button></td>
+                  </tr>
+                  <tr v-if="!partnerCampaigns.length"><td colspan="6"><div class="empty-inline"><img :src="logoUrl" alt="" />暂无裂变活动</div></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="panel-card">
+            <div class="pc-header"><h3>报名与核销记录</h3><span class="tag-count">{{ partnerCampaignSignups.length }} 条</span></div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>单号</th><th>客户</th><th>手机号</th><th>金额</th><th>核销码</th><th>状态</th></tr></thead>
+                <tbody>
+                  <tr v-for="item in partnerCampaignSignups" :key="item.id">
+                    <td>{{ item.orderSn }}</td>
+                    <td>{{ item.nickname }}</td>
+                    <td>{{ item.mobile }}</td>
+                    <td>¥{{ formatMoney(item.amount) }}</td>
+                    <td>{{ item.voucherCode }}</td>
+                    <td><span class="status-pill" :class="{ pending: item.status === 0, on: item.status === 1 || item.status === 2, off: item.status === 3 }">{{ item.status === 0 ? '待支付/确认' : item.status === 1 ? '待核销' : item.status === 2 ? '已核销' : '已取消' }}</span></td>
+                  </tr>
+                  <tr v-if="!partnerCampaignSignups.length"><td colspan="6"><div class="empty-inline"><img :src="logoUrl" alt="" />暂无报名记录</div></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section v-if="activeMenu === 'notifications'">
+          <div class="page-top">
+            <div class="page-brand"><img :src="logoUrl" alt="" /><span>通知公告</span></div>
+            <h2>通知公告</h2>
+            <p>查看系统公告、业务提醒和未读消息</p>
+          </div>
+
+          <div v-if="notificationMessage" class="bind-feedback admin-message" :class="{ ok: !isFailureMessage(notificationMessage), fail: isFailureMessage(notificationMessage) }">{{ notificationMessage }}</div>
+
+          <div class="panel-card">
+            <div class="pc-header">
+              <h3>我的通知</h3>
+              <div class="header-actions">
+                <button class="text-btn" @click="markAllNotificationsRead" :disabled="!notificationUnread">全部已读</button>
+                <button class="text-btn" @click="loadNotifications" :disabled="notificationLoading">{{ notificationLoading ? '刷新中' : '刷新' }}</button>
+                <span class="tag-count">未读 {{ notificationUnread || 0 }}</span>
+              </div>
+            </div>
+            <div class="notice-list">
+              <div v-for="item in notifications" :key="item.id" class="notice-item" :class="{ unread: item.isRead === 0 }" @click="markNotificationRead(item)">
+                <div class="notice-main">
+                  <b>{{ item.title }}</b>
+                  <p>{{ item.content }}</p>
+                </div>
+                <div class="notice-meta">
+                  <span>{{ item.type || 'SYSTEM' }}</span>
+                  <time>{{ formatTime(item.createTime) }}</time>
+                </div>
+              </div>
+              <div v-if="!notifications.length" class="empty-inline"><img :src="logoUrl" alt="" />暂无通知</div>
+            </div>
+            <div class="pagination-bar">
+              <span>第 {{ notificationPage.page }} / {{ totalPages(notificationTotal, notificationPage) }} 页</span>
+              <select v-model.number="notificationPage.size" @change="loadNotifications"><option :value="10">10条/页</option><option :value="20">20条/页</option><option :value="50">50条/页</option></select>
+              <button class="text-btn" @click="setPage(notificationPage, notificationPage.page - 1, notificationTotal, loadNotifications)" :disabled="!canPrev(notificationPage)">上一页</button>
+              <button class="text-btn" @click="setPage(notificationPage, notificationPage.page + 1, notificationTotal, loadNotifications)" :disabled="!canNext(notificationTotal, notificationPage)">下一页</button>
+            </div>
+          </div>
+        </section>
+
+        <section v-if="activeMenu === 'notificationAdmin' && isAdmin">
+          <div class="page-top">
+            <div class="page-brand"><img :src="logoUrl" alt="" /><span>管理台</span></div>
+            <h2>公告发布</h2>
+            <p>向所有正常会员发布系统公告</p>
+          </div>
+
+          <div v-if="adminNotificationMessage" class="bind-feedback admin-message" :class="{ ok: !isFailureMessage(adminNotificationMessage), fail: isFailureMessage(adminNotificationMessage) }">{{ adminNotificationMessage }}</div>
+
+          <div class="panel-card">
+            <div class="pc-header"><h3>发布公告</h3></div>
+            <div class="form-grid">
+              <label class="span-2"><span>标题</span><input v-model="notificationForm.title" placeholder="请输入公告标题" /></label>
+              <label class="span-2"><span>内容</span><textarea v-model="notificationForm.content" placeholder="请输入公告内容"></textarea></label>
+              <button class="btn-main span-2" @click="broadcastNotification" :disabled="adminNotificationLoading || !notificationForm.title.trim() || !notificationForm.content.trim()">发布公告</button>
+            </div>
+          </div>
+
+          <div class="panel-card">
+            <div class="pc-header">
+              <h3>公告记录</h3>
+              <div class="header-actions">
+                <input class="header-search" v-model="adminNotificationFilters.keyword" placeholder="搜索标题/内容" @keyup.enter="searchAdminNotifications" />
+                <button class="text-btn" @click="searchAdminNotifications" :disabled="adminNotificationLoading">查询</button>
+                <span class="tag-count">{{ adminNotificationTotal }} 条</span>
+              </div>
+            </div>
+            <div class="notice-list">
+              <div v-for="item in adminNotifications" :key="item.id" class="notice-item">
+                <div class="notice-main">
+                  <b>{{ item.title }}</b>
+                  <p>{{ item.content }}</p>
+                </div>
+                <div class="notice-meta">
+                  <span>会员 ID {{ item.userId }}</span>
+                  <time>{{ formatTime(item.createTime) }}</time>
+                </div>
+              </div>
+              <div v-if="!adminNotifications.length" class="empty-inline"><img :src="logoUrl" alt="" />暂无公告记录</div>
+            </div>
+            <div class="pagination-bar">
+              <span>第 {{ adminNotificationPage.page }} / {{ totalPages(adminNotificationTotal, adminNotificationPage) }} 页</span>
+              <select v-model.number="adminNotificationPage.size" @change="searchAdminNotifications"><option :value="10">10条/页</option><option :value="20">20条/页</option><option :value="50">50条/页</option></select>
+              <button class="text-btn" @click="setPage(adminNotificationPage, adminNotificationPage.page - 1, adminNotificationTotal, loadAdminNotifications)" :disabled="!canPrev(adminNotificationPage)">上一页</button>
+              <button class="text-btn" @click="setPage(adminNotificationPage, adminNotificationPage.page + 1, adminNotificationTotal, loadAdminNotifications)" :disabled="!canNext(adminNotificationTotal, adminNotificationPage)">下一页</button>
+            </div>
+          </div>
+        </section>
+
+        <section v-if="activeMenu === 'support'">
+          <div class="page-top">
+            <div class="page-brand"><img :src="logoUrl" alt="" /><span>客服中心</span></div>
+            <h2>客服中心</h2>
+            <p>提交使用问题，后台客服会在这里回复</p>
+          </div>
+
+          <div class="panel-card support-panel">
+            <div class="pc-header">
+              <h3>我的咨询</h3>
+              <button class="text-btn" @click="loadSupportMessages" :disabled="supportLoading">{{ supportLoading ? '刷新中' : '刷新' }}</button>
+            </div>
+            <div v-if="supportMessage" class="bind-feedback admin-message" :class="{ ok: !isFailureMessage(supportMessage), fail: isFailureMessage(supportMessage) }">{{ supportMessage }}</div>
+            <div class="support-thread">
+              <div v-for="msg in supportMessages" :key="msg.id" class="support-bubble" :class="{ mine: msg.senderType === 'USER', staff: msg.senderType !== 'USER' }">
+                <div class="support-bubble-body">{{ msg.content }}</div>
+                <span>{{ msg.senderType === 'USER' ? '我' : '客服' }} · {{ formatTime(msg.createTime) }}</span>
+              </div>
+              <div v-if="!supportMessages.length" class="empty-inline"><img :src="logoUrl" alt="" />暂无客服消息</div>
+            </div>
+            <div class="support-compose">
+              <textarea v-model="supportInput" placeholder="输入要咨询的问题"></textarea>
+              <button class="btn-main" @click="sendSupportMessage" :disabled="supportLoading || !supportInput.trim()">{{ supportLoading ? '发送中' : '发送' }}</button>
+            </div>
+          </div>
+        </section>
+
+        <section v-if="activeMenu === 'supportAdmin' && isAdmin">
+          <div class="page-top">
+            <div class="page-brand"><img :src="logoUrl" alt="" /><span>管理台</span></div>
+            <h2>客服消息</h2>
+            <p>查看会员咨询，并按会员 ID 回复</p>
+          </div>
+
+          <div v-if="adminSupportMessage" class="bind-feedback admin-message" :class="{ ok: !isFailureMessage(adminSupportMessage), fail: isFailureMessage(adminSupportMessage) }">{{ adminSupportMessage }}</div>
+
+          <div class="panel-card">
+            <div class="pc-header"><h3>消息筛选</h3><span class="tag-count">{{ adminSupportTotal }} 条</span></div>
+            <div class="filter-bar">
+              <input v-model="adminSupportFilters.userId" type="number" placeholder="会员 ID" />
+              <input v-model="adminSupportFilters.keyword" placeholder="消息关键词" />
+              <button class="btn-main" @click="searchAdminSupportMessages" :disabled="adminSupportLoading">{{ adminSupportLoading ? '加载中' : '查询' }}</button>
+            </div>
+          </div>
+
+          <div class="panel-card">
+            <div class="pc-header"><h3>客服回复</h3></div>
+            <div class="form-grid">
+              <label><span>会员 ID</span><input v-model="adminSupportReplyUserId" type="number" placeholder="要回复的会员 ID" /></label>
+              <label class="span-2"><span>回复内容</span><textarea v-model="adminSupportReplyText" placeholder="输入回复内容"></textarea></label>
+              <button class="btn-main span-2" @click="replySupportMessage" :disabled="adminSupportLoading || !adminSupportReplyUserId || !adminSupportReplyText.trim()">发送回复</button>
+            </div>
+          </div>
+
+          <div class="panel-card">
+            <div class="pc-header"><h3>消息列表</h3><span class="tag-count">{{ adminSupportTotal }} 条</span></div>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead><tr><th>会员</th><th>发送人</th><th>类型</th><th>内容</th><th>时间</th></tr></thead>
+                <tbody>
+                  <tr v-for="msg in adminSupportMessages" :key="msg.id">
+                    <td><div class="price-stack"><span>{{ msg.userNickname || msg.userMobile || '-' }}</span><span>ID {{ msg.userId }}</span></div></td>
+                    <td>{{ msg.senderType === 'USER' ? '会员' : '客服' }} {{ msg.senderNickname || msg.senderMobile || '' }}</td>
+                    <td>{{ msg.messageType || 'TEXT' }}</td>
+                    <td>{{ msg.content }}</td>
+                    <td>{{ formatTime(msg.createTime) }}</td>
+                  </tr>
+                  <tr v-if="!adminSupportMessages.length"><td colspan="5"><div class="empty-inline"><img :src="logoUrl" alt="" />暂无客服消息</div></td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="pagination-bar">
+              <span>第 {{ adminSupportPage.page }} / {{ totalPages(adminSupportTotal, adminSupportPage) }} 页</span>
+              <select v-model.number="adminSupportPage.size" @change="searchAdminSupportMessages"><option :value="20">20条/页</option><option :value="50">50条/页</option><option :value="100">100条/页</option></select>
+              <button class="text-btn" @click="setPage(adminSupportPage, adminSupportPage.page - 1, adminSupportTotal, loadAdminSupportMessages)" :disabled="!canPrev(adminSupportPage)">上一页</button>
+              <button class="text-btn" @click="setPage(adminSupportPage, adminSupportPage.page + 1, adminSupportTotal, loadAdminSupportMessages)" :disabled="!canNext(adminSupportTotal, adminSupportPage)">下一页</button>
+            </div>
+          </div>
+        </section>
+
+        <section v-if="activeMenu === 'dashboardAdmin' && isAdmin">
+          <div class="page-top">
+            <div class="page-brand"><img :src="logoUrl" alt="" /><span>管理台</span></div>
+            <h2>经营概览</h2>
+            <p>查看会员增长、订单收入、分润和待处理提现</p>
+          </div>
+
+          <div v-if="dashboardMessage" class="bind-feedback admin-message" :class="{ ok: !isFailureMessage(dashboardMessage), fail: isFailureMessage(dashboardMessage) }">{{ dashboardMessage }}</div>
+
+          <div class="asset-cards">
+            <div class="asset-card green"><span class="ac-icon">会</span><div class="ac-body"><span class="ac-label">会员总数</span><span class="ac-value">{{ dashboardOverview.totalUsers || 0 }}</span></div></div>
+            <div class="asset-card gold"><span class="ac-icon">收</span><div class="ac-body"><span class="ac-label">累计订单收入</span><span class="ac-value">¥{{ formatMoney(dashboardOverview.totalRevenue) }}</span></div></div>
+            <div class="asset-card blue"><span class="ac-icon">今</span><div class="ac-body"><span class="ac-label">今日订单收入</span><span class="ac-value">¥{{ formatMoney(dashboardOverview.todayRevenue) }}</span></div></div>
+            <div class="asset-card green"><span class="ac-icon">润</span><div class="ac-body"><span class="ac-label">今日分润</span><span class="ac-value">¥{{ formatMoney(dashboardOverview.todayProfit) }}</span></div></div>
+            <div class="asset-card gold"><span class="ac-icon">提</span><div class="ac-body"><span class="ac-label">待审提现</span><span class="ac-value">¥{{ formatMoney(dashboardOverview.pendingWithdrawals) }}</span></div></div>
+            <div class="asset-card blue"><span class="ac-icon">单</span><div class="ac-body"><span class="ac-label">待审提现笔数</span><span class="ac-value">{{ dashboardOverview.pendingWithdrawalCount || 0 }}</span></div></div>
+          </div>
+
+          <div class="dashboard-grid">
+            <div class="panel-card">
+              <div class="pc-header"><h3>近 14 天收入</h3><button class="text-btn" @click="loadDashboard" :disabled="dashboardLoading">{{ dashboardLoading ? '刷新中' : '刷新' }}</button></div>
+              <div class="dashboard-bars">
+                <div v-for="row in dashboardRevenueTrend" :key="rowValue(row, 'date')" class="dash-bar-row">
+                  <span>{{ rowValue(row, 'date') }}</span>
+                  <div class="dash-bar-track"><i :style="{ width: dashboardBarWidth(dashboardRevenueTrend, 'amount', row) }"></i></div>
+                  <strong>¥{{ formatMoney(rowValue(row, 'amount')) }}</strong>
+                </div>
+                <div v-if="!dashboardRevenueTrend.length" class="empty-inline">暂无收入数据</div>
+              </div>
+            </div>
+
+            <div class="panel-card">
+              <div class="pc-header"><h3>近 14 天新增会员</h3></div>
+              <div class="dashboard-bars">
+                <div v-for="row in dashboardUserGrowth" :key="rowValue(row, 'date')" class="dash-bar-row">
+                  <span>{{ rowValue(row, 'date') }}</span>
+                  <div class="dash-bar-track"><i :style="{ width: dashboardBarWidth(dashboardUserGrowth, 'count', row) }"></i></div>
+                  <strong>{{ rowValue(row, 'count') || 0 }}</strong>
+                </div>
+                <div v-if="!dashboardUserGrowth.length" class="empty-inline">暂无新增会员</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="dashboard-grid">
+            <div class="panel-card">
+              <div class="pc-header"><h3>会员角色分布</h3></div>
+              <div class="pc-body compact-list">
+                <div v-for="row in dashboardOverview.roleDistribution || []" :key="rowValue(row, 'role')" class="kv-row">
+                  <span>{{ dashboardRoleLabel(rowValue(row, 'role')) }}</span>
+                  <strong>{{ rowValue(row, 'count') || 0 }}</strong>
+                </div>
+                <div v-if="!(dashboardOverview.roleDistribution || []).length" class="empty-inline">暂无会员数据</div>
+              </div>
+            </div>
+
+            <div class="panel-card">
+              <div class="pc-header"><h3>分润类型分布</h3></div>
+              <div class="pc-body compact-list">
+                <div v-for="row in dashboardProfitDistribution" :key="rowValue(row, 'type')" class="kv-row">
+                  <span>{{ rowValue(row, 'type') || '-' }}</span>
+                  <strong>¥{{ formatMoney(rowValue(row, 'amount')) }}</strong>
+                </div>
+                <div v-if="!dashboardProfitDistribution.length" class="empty-inline">暂无分润数据</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel-card">
+            <div class="pc-header"><h3>最近订单</h3><span class="tag-count">{{ dashboardRecentOrders.length }} 条</span></div>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead><tr><th>订单号</th><th>会员</th><th>类型</th><th>金额</th><th>状态</th><th>时间</th></tr></thead>
+                <tbody>
+                  <tr v-for="order in dashboardRecentOrders" :key="rowValue(order, 'orderSn')">
+                    <td>{{ rowValue(order, 'orderSn') }}</td>
+                    <td>{{ rowValue(order, 'userNickname') || rowValue(order, 'userMobile') || rowValue(order, 'userId') || '-' }}</td>
+                    <td>{{ rowValue(order, 'orderType') }}</td>
+                    <td>¥{{ formatMoney(rowValue(order, 'amount')) }}</td>
+                    <td><span class="status-pill">{{ dashboardOrderStatus(rowValue(order, 'status')) }}</span></td>
+                    <td>{{ formatTime(rowValue(order, 'createTime')) }}</td>
+                  </tr>
+                  <tr v-if="!dashboardRecentOrders.length"><td colspan="6" class="empty-cell">暂无订单</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section v-if="activeMenu === 'orders' && isAdmin">
+          <div class="page-top">
+            <div class="page-brand"><img :src="logoUrl" alt="" /><span>管理台</span></div>
+            <h2>订单管理</h2>
+            <p>查询订单状态、会员来源、金额与支付信息</p>
+          </div>
+
+          <div v-if="orderMessage" class="bind-feedback admin-message" :class="{ ok: !isFailureMessage(orderMessage), fail: isFailureMessage(orderMessage) }">{{ orderMessage }}</div>
+
+          <div class="panel-card">
+            <div class="pc-header"><h3>订单筛选</h3><span class="tag-count">{{ orderTotal }} 单</span></div>
+            <div class="filter-bar stacked">
+              <input v-model="orderFilters.keyword" placeholder="订单号 / 手机号 / 昵称" />
+              <select v-model="orderFilters.status">
+                <option value="">全部状态</option>
+                <option value="0">待支付</option>
+                <option value="1">已支付</option>
+                <option value="2">处理中</option>
+                <option value="3">已完成</option>
+                <option value="4">已取消</option>
+                <option value="5">已退款</option>
+              </select>
+              <select v-model="orderFilters.orderType">
+                <option value="">全部类型</option>
+                <option value="1">店铺加盟</option>
+                <option value="2">代理加盟</option>
+                <option value="3">合伙人加盟</option>
+                <option value="4">产品补货</option>
+                <option value="5">云仓代发</option>
+              </select>
+              <input v-model="orderFilters.startDate" type="date" />
+              <input v-model="orderFilters.endDate" type="date" />
+              <button class="btn-main" @click="searchAdminOrders" :disabled="orderLoading">{{ orderLoading ? '加载中' : '查询' }}</button>
+            </div>
+          </div>
+
+          <div class="panel-card">
+            <div class="pc-header">
+              <h3>订单列表</h3>
+              <div class="header-actions">
+                <button class="text-btn" @click="exportOrders" :disabled="!adminOrders.length">导出CSV</button>
+                <span class="tag-count">{{ orderTotal }} 单</span>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead><tr><th>订单</th><th>会员</th><th>类型</th><th>金额</th><th>状态</th><th>支付</th><th>创建时间</th><th>备注</th></tr></thead>
+                <tbody>
+                  <tr v-for="item in adminOrders" :key="item.id">
+                    <td><div class="price-stack"><b>{{ item.orderSn }}</b><span>ID {{ item.id }}</span></div></td>
+                    <td><div class="price-stack"><span>{{ item.userNickname || item.userMobile || '-' }}</span><span v-if="item.userId">ID {{ item.userId }}</span></div></td>
+                    <td>{{ orderTypeMap[item.orderType] || item.orderType }}</td>
+                    <td>¥{{ formatMoney(item.amount) }}</td>
+                    <td><span class="status-pill" :class="{ on: Number(item.status) === 3, pending: Number(item.status) <= 2, off: Number(item.status) >= 4 }">{{ orderStatusMap[item.status] || item.status }}</span></td>
+                    <td><div class="price-stack"><span>{{ item.payMethod || '-' }}</span><span>{{ item.transactionId || item.payTime || '' }}</span></div></td>
+                    <td>{{ formatTime(item.createTime) }}</td>
+                    <td>{{ item.remark || '-' }}</td>
+                  </tr>
+                  <tr v-if="!adminOrders.length"><td colspan="8"><div class="empty-inline"><img :src="logoUrl" alt="" />暂无订单</div></td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="pagination-bar">
+              <span>第 {{ orderPage.page }} / {{ totalPages(orderTotal, orderPage) }} 页</span>
+              <select v-model.number="orderPage.size" @change="searchAdminOrders"><option :value="10">10单/页</option><option :value="20">20单/页</option><option :value="50">50单/页</option></select>
+              <button class="text-btn" @click="setPage(orderPage, orderPage.page - 1, orderTotal, loadAdminOrders)" :disabled="!canPrev(orderPage)">上一页</button>
+              <button class="text-btn" @click="setPage(orderPage, orderPage.page + 1, orderTotal, loadAdminOrders)" :disabled="!canNext(orderTotal, orderPage)">下一页</button>
+            </div>
+          </div>
+        </section>
+
+        <section v-if="activeMenu === 'auditLogs' && isAdmin">
+          <div class="page-top">
+            <div class="page-brand"><img :src="logoUrl" alt="" /><span>管理台</span></div>
+            <h2>审计日志</h2>
+            <p>查看后台关键操作、操作者、请求地址与时间，便于排查配置和业务变更。</p>
+          </div>
+
+          <div v-if="auditLogMessage" class="bind-feedback admin-message" :class="{ ok: !isFailureMessage(auditLogMessage), fail: isFailureMessage(auditLogMessage) }">{{ auditLogMessage }}</div>
+
+          <div class="panel-card">
+            <div class="pc-header"><h3>日志筛选</h3><span class="tag-count">{{ auditLogTotal }} 条</span></div>
+            <div class="filter-bar">
+              <select v-model="auditLogFilters.module">
+                <option value="">全部模块</option>
+                <option value="系统配置">系统配置</option>
+                <option value="商品管理">商品管理</option>
+                <option value="人员管理">人员管理</option>
+              </select>
+              <input v-model="auditLogFilters.operatorId" type="number" placeholder="操作人 ID" />
+              <input v-model="auditLogFilters.keyword" placeholder="操作/地址/参数关键词" />
+              <input v-model="auditLogFilters.startDate" type="date" />
+              <input v-model="auditLogFilters.endDate" type="date" />
+              <button class="btn-main" @click="searchAuditLogs" :disabled="auditLogLoading">{{ auditLogLoading ? '加载中' : '查询' }}</button>
+            </div>
+          </div>
+
+          <div class="panel-card">
+            <div class="pc-header">
+              <h3>操作记录</h3>
+              <div class="header-actions">
+                <button class="text-btn" @click="exportAuditLogs" :disabled="!auditLogs.length">导出CSV</button>
+                <span class="tag-count">{{ auditLogTotal }} 条</span>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead><tr><th>模块</th><th>操作</th><th>操作人</th><th>请求</th><th>IP</th><th>时间</th><th>参数</th></tr></thead>
+                <tbody>
+                  <tr v-for="item in auditLogs" :key="item.id">
+                    <td>{{ item.module || '-' }}</td>
+                    <td><div class="price-stack"><b>{{ item.operation || '-' }}</b><span>ID {{ item.id }}</span></div></td>
+                    <td><div class="price-stack"><span>{{ item.operatorName || '-' }}</span><span v-if="item.operatorId">ID {{ item.operatorId }}</span></div></td>
+                    <td><div class="price-stack"><span>{{ item.requestMethod || '-' }}</span><span>{{ item.requestUrl || '-' }}</span></div></td>
+                    <td>{{ item.clientIp || '-' }}</td>
+                    <td>{{ formatTime(item.createTime) }}</td>
+                    <td class="params-cell">{{ item.requestParams || '-' }}</td>
+                  </tr>
+                  <tr v-if="!auditLogs.length"><td colspan="7"><div class="empty-inline"><img :src="logoUrl" alt="" />暂无审计日志</div></td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="pagination-bar">
+              <span>第 {{ auditLogPage.page }} / {{ totalPages(auditLogTotal, auditLogPage) }} 页</span>
+              <select v-model.number="auditLogPage.size" @change="searchAuditLogs"><option :value="10">10条/页</option><option :value="20">20条/页</option><option :value="50">50条/页</option></select>
+              <button class="text-btn" @click="setPage(auditLogPage, auditLogPage.page - 1, auditLogTotal, loadAuditLogs)" :disabled="!canPrev(auditLogPage)">上一页</button>
+              <button class="text-btn" @click="setPage(auditLogPage, auditLogPage.page + 1, auditLogTotal, loadAuditLogs)" :disabled="!canNext(auditLogTotal, auditLogPage)">下一页</button>
             </div>
           </div>
         </section>
@@ -1618,9 +3090,10 @@ onUnmounted(clearCodeTimer);
           <div class="page-top">
             <div class="page-brand"><img :src="logoUrl" alt="" /><span>管理台</span></div>
             <h2>系统配置</h2>
-            <p>管理加盟费用与分润政策</p>
+            <p>管理加盟费用、分润政策、支付回调与运行参数</p>
           </div>
           <div v-if="policyMessage" class="bind-feedback admin-message" :class="{ ok: !isFailureMessage(policyMessage), fail: isFailureMessage(policyMessage) }">{{ policyMessage }}</div>
+          <div v-if="systemConfigMessage" class="bind-feedback admin-message" :class="{ ok: !isFailureMessage(systemConfigMessage), fail: isFailureMessage(systemConfigMessage) }">{{ systemConfigMessage }}</div>
           <div v-if="policyWarnings.length" class="policy-warning-panel">
             <strong>配置风险提示</strong>
             <p v-for="warning in policyWarnings" :key="warning">{{ warning }}</p>
@@ -1636,6 +3109,26 @@ onUnmounted(clearCodeTimer);
                   <span v-if="item.suffix" class="config-suffix">{{ item.suffix }}</span>
                   <button class="mini-save" @click="savePolicy(item)" :disabled="policySaving">保存</button>
                 </div>
+              </div>
+            </div>
+          </div>
+          <div v-for="group in systemConfigGroups" :key="group.title" class="panel-card">
+            <div class="pc-header"><h3>{{ group.title }}</h3></div>
+            <div class="config-grid editable">
+              <div v-for="item in group.items" :key="item.key" class="cfg-item editable">
+                <label :for="item.key">{{ item.label }}</label>
+                <div class="cfg-edit-row">
+                  <input
+                    :id="item.key"
+                    v-model="systemConfigs[item.key]"
+                    :type="item.type || 'text'"
+                    :placeholder="item.description"
+                  />
+                  <button class="mini-save" @click="saveSystemConfig(item)" :disabled="systemConfigSaving === item.key">
+                    {{ systemConfigSaving === item.key ? '保存中' : '保存' }}
+                  </button>
+                </div>
+                <p class="cfg-desc">{{ item.description }}</p>
               </div>
             </div>
           </div>
@@ -1717,6 +3210,129 @@ button { cursor: pointer; }
 .poster-ref b { color: #fff; }
 .poster-copy code { display: block; margin: 14px 0; padding: 10px 12px; border: 1px solid #e2ead9; border-radius: 8px; background: #fbfcf8; color: var(--text3); word-break: break-all; }
 
+.campaign-public { min-height: 100vh; background: #eef3f0; color: #13221f; padding-bottom: 28px; overflow-x: hidden; }
+.campaign-public > .campaign-topbar,
+.campaign-public > .campaign-hero,
+.campaign-public > .campaign-content,
+.campaign-public > .campaign-signup { display: none; }
+.campaign-appbar { position: sticky; top: 0; z-index: 30; min-height: 64px; padding: 10px max(16px, calc((100vw - 430px) / 2)); display: flex; align-items: center; justify-content: space-between; gap: 12px; background: #08a99d; color: #fff; box-shadow: 0 8px 22px rgba(0, 137, 128, .18); }
+.campaign-appbar div { min-width: 0; text-align: center; flex: 1; }
+.campaign-appbar b { display: block; font-size: 18px; line-height: 1.2; }
+.campaign-appbar span { display: block; margin-top: 2px; font-size: 12px; opacity: .82; }
+.campaign-mini, .campaign-back { min-width: 42px; height: 36px; border: 1px solid rgba(255,255,255,.38); border-radius: 8px; color: #fff; background: rgba(255,255,255,.13); font-weight: 800; }
+.campaign-back { font-size: 30px; line-height: 1; }
+.campaign-phone-shell { width: min(430px, 100%); margin: 0 auto; padding-bottom: 112px; background: #f1f2f2; min-height: calc(100vh - 64px); overflow-x: hidden; }
+.campaign-cover { position: relative; min-height: 300px; overflow: hidden; background: #08a99d; }
+.campaign-cover-img { width: 100%; height: 340px; object-fit: cover; display: block; }
+.campaign-cover-mask { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,.12), rgba(0,169,157,.08) 42%, rgba(0,169,157,.94)); }
+.campaign-store-float { position: absolute; left: 18px; right: 18px; bottom: 20px; padding: 18px; display: flex; justify-content: space-between; gap: 12px; align-items: flex-end; border: 1px solid rgba(255,211,142,.8); border-radius: 8px; background: rgba(0, 153, 142, .92); color: #ffe5a9; box-shadow: 0 12px 28px rgba(0,0,0,.2); }
+.campaign-store-float span { display: block; font-size: 12px; opacity: .82; }
+.campaign-store-float h1 { margin: 6px 0 0; color: #ffe58f; font-size: 28px; line-height: 1.1; }
+.campaign-store-float button, .campaign-item-bottom button { border: 0; border-radius: 8px; background: #df1711; color: #fff4cf; font-weight: 900; white-space: nowrap; }
+.campaign-store-float button { height: 38px; padding: 0 14px; }
+.campaign-shop-card, .campaign-sale, .campaign-benefits > div, .campaign-order-box, .campaign-order-product, .campaign-item-card, .campaign-success-card, .campaign-share-card, .campaign-mine-head, .campaign-status-grid, .campaign-mine-list { margin: 12px 16px; border-radius: 8px; background: #fff; box-shadow: 0 8px 20px rgba(18, 44, 42, .08); }
+.campaign-shop-card { margin-top: -2px; padding: 16px; display: flex; justify-content: space-between; gap: 12px; border: 1px solid #c8efea; }
+.campaign-shop-card h2 { color: #08786f; font-size: 22px; }
+.campaign-shop-card p, .campaign-contact span { color: #667; font-size: 13px; }
+.campaign-contact { text-align: right; color: #08a99d; }
+.campaign-contact b { display: block; margin-top: 6px; color: #08a99d; font-size: 18px; }
+.campaign-sale { padding: 20px 18px; background: #08a99d; color: #fff; }
+.campaign-sale-kicker { display: inline-flex; padding: 5px 10px; border-radius: 8px; background: rgba(255,255,255,.16); color: #ffe58f; font-weight: 900; font-size: 12px; }
+.campaign-sale h2 { margin: 16px 0 2px; color: #ffe58f; font-size: 34px; line-height: 1.05; }
+.campaign-sale h3 { margin: 0 0 10px; color: #e01510; font-size: 30px; line-height: 1.1; text-shadow: 0 1px 0 rgba(255,255,255,.34); }
+.campaign-sale p { color: rgba(255,255,255,.86); }
+.campaign-price-row { margin-top: 16px; display: flex; justify-content: space-between; align-items: end; gap: 10px; }
+.campaign-price-row span, .campaign-price-row em { font-size: 13px; opacity: .82; font-style: normal; }
+.campaign-price-row b { display: block; color: #ffe58f; font-size: 36px; line-height: 1; }
+.campaign-progress { height: 9px; margin-top: 14px; border-radius: 99px; background: rgba(255,255,255,.22); overflow: hidden; }
+.campaign-progress i { display: block; height: 100%; border-radius: inherit; background: #ffe58f; }
+.campaign-trust { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.campaign-trust span { padding: 5px 9px; border-radius: 8px; background: rgba(255,255,255,.16); color: #fff; font-size: 12px; }
+.campaign-benefits { padding: 0 0 6px; }
+.campaign-benefits > div { padding: 16px; }
+.campaign-benefits b, .campaign-order-box b, .campaign-share-card b { color: #08786f; }
+.campaign-benefits p { margin-top: 8px; white-space: pre-line; color: #4f625f; line-height: 1.7; }
+.campaign-notice { margin: 30px 16px 210px; padding: 14px 16px; border-radius: 8px; background: #d7f5f1; color: #0d6059; font-weight: 700; }
+.campaign-item-card { padding: 16px; display: flex; gap: 14px; }
+.campaign-item-card img, .campaign-order-product img { width: 86px; height: 86px; border-radius: 8px; object-fit: cover; flex-shrink: 0; }
+.campaign-item-card h2 { font-size: 18px; color: #111; line-height: 1.35; }
+.campaign-item-card p, .campaign-item-card span { display: block; margin-top: 6px; color: #6b7280; font-size: 13px; }
+.campaign-item-bottom { margin-top: 12px; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.campaign-item-bottom b { color: #08a99d; font-size: 24px; }
+.campaign-item-bottom button { height: 36px; padding: 0 14px; }
+.campaign-confirm { padding-top: 14px; }
+.campaign-order-box { padding: 18px; }
+.campaign-order-box p { margin: 9px 0; font-size: 16px; color: #222; }
+.campaign-order-box label { display: block; margin-top: 14px; }
+.campaign-order-box label span { display: block; margin-bottom: 6px; color: #4f625f; font-weight: 800; }
+.campaign-order-box input, .campaign-order-box textarea { width: 100%; border: 1px solid #d8e5e1; border-radius: 8px; padding: 10px 12px; font-size: 15px; }
+.campaign-order-box textarea { min-height: 84px; resize: vertical; }
+.campaign-order-product { padding: 16px; display: grid; grid-template-columns: 86px minmax(0, 1fr) auto; gap: 14px; align-items: center; }
+.campaign-order-product b { display: block; color: #111; line-height: 1.4; }
+.campaign-order-product span { color: #8b8b8b; }
+.campaign-order-product strong { color: #08a99d; font-size: 22px; }
+.campaign-success { padding-top: 18px; }
+.campaign-success-card { padding: 28px 20px; text-align: center; background: linear-gradient(180deg, #08a99d, #087c73); color: #fff; }
+.campaign-success-card span { color: #ffe58f; font-weight: 900; }
+.campaign-success-card h2 { margin: 10px 0; font-size: 24px; }
+.campaign-success-card strong { display: inline-flex; max-width: 100%; margin: 8px 0 12px; padding: 10px 14px; border-radius: 8px; background: #fff; color: #08786f; font-size: clamp(20px, 6vw, 28px); letter-spacing: 1px; overflow-wrap: anywhere; word-break: break-all; }
+.campaign-success-card p { color: rgba(255,255,255,.86); }
+.campaign-share-card { padding: 16px; display: flex; gap: 14px; align-items: center; }
+.campaign-share-card img { width: 96px; height: 96px; border-radius: 8px; border: 8px solid #fff; box-shadow: 0 6px 18px rgba(0,0,0,.12); }
+.campaign-share-card p { margin-top: 6px; color: #667; }
+.campaign-success-actions { margin: 14px 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.campaign-mine { padding-top: 18px; }
+.campaign-mine-head { padding: 22px 18px; display: flex; align-items: center; gap: 14px; background: #08a99d; color: #fff; }
+.campaign-mine-head img { width: 66px; height: 66px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(255,255,255,.7); }
+.campaign-mine-head h2 { color: #fff; font-size: 22px; }
+.campaign-mine-head p { color: rgba(255,255,255,.78); }
+.campaign-mine-head button { margin-left: auto; height: 34px; padding: 0 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,.55); color: #fff; background: transparent; }
+.campaign-status-grid { padding: 18px 8px; display: grid; grid-template-columns: repeat(4, 1fr); text-align: center; color: #111; font-size: 17px; }
+.campaign-mine-list { overflow: hidden; }
+.campaign-mine-list button { width: 100%; min-height: 62px; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; border: 0; border-bottom: 1px solid #eef0f0; background: #fff; color: #111; font-size: 18px; text-align: left; }
+.campaign-mine-list button::after { content: '›'; color: #9ca3af; font-size: 28px; }
+.campaign-toast { position: fixed; left: 50%; bottom: 88px; z-index: 80; width: min(390px, calc(100% - 32px)); transform: translateX(-50%); padding: 12px 14px; border-radius: 8px; background: rgba(18, 44, 42, .9); color: #fff; text-align: center; }
+.campaign-toast.fail { background: rgba(176, 36, 31, .92); }
+.campaign-submitbar, .campaign-tabbar { position: fixed; left: 50%; bottom: 0; z-index: 70; width: min(430px, 100%); transform: translateX(-50%); min-height: 68px; padding: 10px 16px; background: #fff; box-shadow: 0 -8px 18px rgba(0,0,0,.08); }
+.campaign-submitbar { display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
+.campaign-submitbar span { color: #8b8b8b; }
+.campaign-submitbar b { color: #111; font-size: 18px; }
+.campaign-submitbar button { height: 46px; padding: 0 22px; border: 0; border-radius: 999px; background: #08a99d; color: #fff; font-size: 17px; font-weight: 900; }
+.campaign-tabbar { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.campaign-tabbar button { border: 0; background: transparent; color: #8b8b8b; font-size: 13px; }
+.campaign-tabbar span { display: block; margin-bottom: 2px; font-size: 24px; line-height: 1; }
+.campaign-tabbar button.active { color: #08a99d; font-weight: 900; }
+.campaign-kill-btn { position: fixed; left: 50%; bottom: 68px; z-index: 72; width: min(430px, 100%); transform: translateX(-50%); height: 58px; border: 0; background: #d91509; color: #ffe5a9; font-size: 22px; font-weight: 900; letter-spacing: 4px; }
+.campaign-loading { width: min(430px, 100%); min-height: 100vh; margin: 0 auto; display: grid; place-items: center; align-content: center; gap: 16px; background: #f4f8f7; color: #08786f; }
+.campaign-loading img { width: 78px; height: 78px; border-radius: 8px; }
+.campaign-template-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 0 0 16px; }
+.campaign-template-row button { min-height: 38px; padding: 0 10px; border: 1px solid #cde8df; border-radius: 8px; background: #f1fbf8; color: #08786f; font-weight: 800; }
+.campaign-template-row button:hover { background: #e2f7f1; border-color: #9ad9cc; }
+.campaign-topbar { position: sticky; top: 0; z-index: 20; min-height: 64px; padding: 10px max(18px, calc((100vw - 960px) / 2)); display: flex; align-items: center; justify-content: space-between; gap: 12px; background: #0f766e; color: #fff; box-shadow: 0 8px 24px rgba(15, 118, 110, .18); }
+.campaign-topbar div { display: flex; flex-direction: column; line-height: 1.25; }
+.campaign-topbar b { font-size: 18px; }
+.campaign-topbar span { font-size: 12px; opacity: .78; }
+.campaign-topbar button { min-height: 36px; padding: 0 14px; border: 1px solid rgba(255,255,255,.35); border-radius: 8px; color: #fff; background: rgba(255,255,255,.12); font-weight: 800; }
+.campaign-hero { width: min(960px, calc(100% - 28px)); margin: 18px auto; display: grid; grid-template-columns: minmax(0, 1fr) 220px; gap: 14px; }
+.campaign-store-card, .campaign-price-card, .campaign-panel, .campaign-signup { border: 1px solid #dfe8e2; border-radius: 8px; background: #fff; box-shadow: 0 12px 30px rgba(14, 43, 36, .08); }
+.campaign-store-card { padding: 24px; background: linear-gradient(135deg, #ffffff 0%, #e9f5ef 100%); }
+.campaign-kicker { display: inline-flex; min-height: 28px; align-items: center; padding: 0 10px; border-radius: 8px; background: #e7f7f1; color: #0f766e; font-size: 13px; font-weight: 900; }
+.campaign-store-card h1 { margin: 14px 0 8px; color: #104139; font-size: 30px; line-height: 1.2; }
+.campaign-store-card p { color: #52645f; }
+.campaign-store-lines { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 18px; }
+.campaign-store-lines span { padding: 10px; border-radius: 8px; background: rgba(15,118,110,.08); color: #27524a; font-size: 13px; overflow-wrap: anywhere; }
+.campaign-price-card { padding: 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; background: #0f766e; color: #fff; }
+.campaign-price-card span { opacity: .76; font-size: 13px; }
+.campaign-price-card b { margin: 8px 0; color: #fde68a; font-size: 34px; line-height: 1; }
+.campaign-price-card em { font-size: 12px; font-style: normal; opacity: .8; }
+.campaign-content { width: min(960px, calc(100% - 28px)); margin: 0 auto 18px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.campaign-panel { padding: 18px; }
+.campaign-panel h2, .campaign-signup h2 { color: #104139; font-size: 18px; margin-bottom: 8px; }
+.campaign-panel p { color: #53665f; font-size: 14px; white-space: pre-line; }
+.campaign-qr-panel { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+.campaign-qr-panel img { width: 128px; height: 128px; border: 8px solid #fff; border-radius: 8px; box-shadow: 0 8px 20px rgba(15, 118, 110, .18); }
+.campaign-signup { width: min(960px, calc(100% - 28px)); margin: 0 auto; padding: 22px; }
+
 .login-page { min-height: 100vh; padding: 32px 16px; background: radial-gradient(circle at 80% 18%, rgba(199, 222, 185, .48), transparent 32%), linear-gradient(160deg, #eef5e8 0%, #f8faf4 48%, #dfead6 100%); display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
 .login-bg { position: absolute; inset: 0; overflow: hidden; background: linear-gradient(120deg, rgba(29, 68, 22, .08), rgba(255,255,255,0) 46%), linear-gradient(180deg, rgba(255,255,255,.5), rgba(255,255,255,0)); }
 .login-container { position: relative; z-index: 1; width: min(392px, 100%); }
@@ -1727,8 +3343,9 @@ button { cursor: pointer; }
 .brand-sub { color: #58714e; font-size: 14px; margin-top: 4px; letter-spacing: 3px; }
 .login-card { background: rgba(255, 255, 255, .94); border: 1px solid #dfe8d7; border-radius: 8px; padding: 30px 28px; box-shadow: 0 18px 50px rgba(31, 68, 22, .13); backdrop-filter: blur(10px); }
 .back-home { margin: 0 0 16px; padding: 0; border: 0; background: transparent; color: var(--pri); font-size: 13px; font-weight: 800; }
-.card-tabs { margin-bottom: 24px; padding-bottom: 12px; border-bottom: 1px solid #edf1e7; }
-.tab { display: inline-flex; align-items: center; min-height: 30px; border-bottom: 2px solid var(--pri); font-size: 18px; font-weight: 700; color: var(--pri); }
+.card-tabs { margin-bottom: 24px; padding-bottom: 12px; border-bottom: 1px solid #edf1e7; display: flex; gap: 18px; flex-wrap: wrap; }
+.tab { display: inline-flex; align-items: center; min-height: 30px; padding: 0; border: 0; border-bottom: 2px solid transparent; background: transparent; font-size: 18px; font-weight: 700; color: var(--text3); }
+.tab.active { border-bottom-color: var(--pri); color: var(--pri); }
 .invite-hint { margin-bottom: 18px; padding: 12px; border: 1px solid #e2ead9; border-radius: 8px; background: #fbfcf8; }
 .invite-hint b { display: block; color: var(--pri-dark); font-size: 14px; }
 .invite-hint span { color: var(--text3); font-size: 12px; }
@@ -1769,6 +3386,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--p
 .menu-item:hover { background: rgba(255,255,255,.06); color: #fff; }
 .menu-item.active { background: var(--pri); color: #fff; }
 .mi-icon { width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; background: rgba(255,255,255,.12); font-size: 12px; font-weight: 700; }
+.menu-badge { margin-left: auto; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: #f7c948; color: #234018; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-style: normal; font-weight: 800; }
 .sidebar-user { padding: 20px 16px; border-top: 1px solid rgba(255,255,255,.08); }
 .user-card { display: flex; align-items: center; gap: 12px; }
 .user-avatar-img { width: 38px; height: 38px; border-radius: 8px; object-fit: cover; background: var(--accent); }
@@ -1815,6 +3433,36 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--p
 .flow-amount.up, .money-up { color: var(--success); }
 .join-actions { display: flex; gap: 12px; flex-wrap: wrap; }
 
+.dashboard-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; margin-bottom: 22px; }
+.dashboard-bars { padding: 18px 20px 20px; display: flex; flex-direction: column; gap: 12px; }
+.dash-bar-row { display: grid; grid-template-columns: 96px minmax(0, 1fr) 88px; align-items: center; gap: 10px; font-size: 13px; color: var(--text3); }
+.dash-bar-row strong { color: var(--text2); text-align: right; font-size: 13px; overflow-wrap: anywhere; }
+.dash-bar-track { height: 9px; border-radius: 999px; background: #eef3ea; overflow: hidden; }
+.dash-bar-track i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--pri), #9bb56b); }
+.compact-list { display: flex; flex-direction: column; gap: 10px; }
+.kv-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 14px; background: #fafbf8; border: 1px solid #edf1e7; border-radius: 8px; color: var(--text2); font-size: 14px; }
+.kv-row strong { color: var(--pri-dark); }
+
+.support-thread { padding: 18px 20px; display: flex; flex-direction: column; gap: 12px; max-height: 420px; overflow: auto; background: #fbfcf8; }
+.support-bubble { display: flex; flex-direction: column; gap: 5px; max-width: 72%; }
+.support-bubble.mine { align-self: flex-end; align-items: flex-end; }
+.support-bubble.staff { align-self: flex-start; align-items: flex-start; }
+.support-bubble-body { padding: 11px 13px; border-radius: 8px; background: #fff; border: 1px solid var(--border); color: var(--text2); line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
+.support-bubble.mine .support-bubble-body { background: #eef7e8; border-color: #d8e9cc; color: var(--pri-dark); }
+.support-bubble span { font-size: 12px; color: var(--text3); }
+.support-compose { padding: 16px 20px 20px; display: grid; grid-template-columns: minmax(0, 1fr) 120px; gap: 12px; border-top: 1px solid #eef1e8; }
+.support-compose textarea { min-height: 74px; resize: vertical; border: 1.5px solid var(--border); border-radius: 8px; padding: 10px 12px; color: var(--text1); }
+
+.notice-list { display: flex; flex-direction: column; }
+.notice-item { display: flex; justify-content: space-between; gap: 18px; padding: 16px 20px; border-bottom: 1px solid #eef1e8; cursor: pointer; background: #fff; }
+.notice-item:last-child { border-bottom: 0; }
+.notice-item.unread { background: #fbfff7; box-shadow: inset 3px 0 0 var(--pri); }
+.notice-main { min-width: 0; }
+.notice-main b { display: block; margin-bottom: 6px; color: var(--text1); font-size: 15px; }
+.notice-main p { color: var(--text2); font-size: 13px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
+.notice-meta { flex-shrink: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; color: var(--text3); font-size: 12px; white-space: nowrap; }
+.header-search { height: 34px; min-width: 180px; border: 1.5px solid var(--border); border-radius: 8px; padding: 0 10px; color: var(--text1); }
+
 .team-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .team-card { display: flex; align-items: center; gap: 14px; padding: 16px; background: #fafbf8; border-radius: 8px; }
 .tm-logo { width: 42px; height: 42px; border-radius: 8px; object-fit: cover; flex-shrink: 0; }
@@ -1843,6 +3491,38 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--p
 .share-card .qr-hint { color: rgba(255,255,255,.78); }
 .qr-link { display: block; margin-top: 12px; padding: 10px 14px; background: #fff; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; color: var(--text3); word-break: break-all; }
 .poster-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+
+.invite-upgrade-grid { display: grid; grid-template-columns: minmax(280px, 390px) minmax(320px, 1fr); gap: 24px; align-items: stretch; text-align: left; }
+.invite-poster-preview { position: relative; min-height: 690px; padding: 22px; border-radius: 8px; overflow: hidden; color: #fff; background: radial-gradient(circle at 82% 8%, rgba(255,229,143,.28), transparent 30%), linear-gradient(180deg, #08a99d 0%, #08786f 48%, #0b3a2b 100%); box-shadow: 0 18px 44px rgba(8, 62, 52, .22); }
+.invite-poster-preview::before { content: ""; position: absolute; inset: 12px; border: 1px solid rgba(255,229,143,.36); border-radius: 8px; pointer-events: none; }
+.invite-poster-alert { position: relative; z-index: 1; display: inline-flex; padding: 8px 12px; border-radius: 8px; background: #d91e18; color: #ffe8a8; font-size: 12px; font-weight: 900; box-shadow: 0 8px 20px rgba(109, 0, 0, .2); }
+.invite-poster-brand { position: relative; z-index: 1; display: flex; align-items: center; gap: 10px; margin-top: 20px; }
+.invite-poster-brand img { width: 46px; height: 46px; border-radius: 8px; object-fit: cover; border: 1px solid rgba(255,229,143,.5); }
+.invite-poster-brand b { display: block; color: #ffe58f; font-size: 20px; }
+.invite-poster-brand span { color: rgba(255,255,255,.72); font-size: 12px; }
+.invite-poster-title { position: relative; z-index: 1; margin-top: 32px; color: #ffe58f; line-height: 1.05; text-shadow: 0 3px 0 rgba(0,0,0,.08); }
+.invite-poster-title span, .invite-poster-title strong { display: block; font-size: clamp(34px, 7vw, 48px); font-weight: 900; letter-spacing: 0; }
+.invite-poster-subtitle { position: relative; z-index: 1; max-width: 320px; margin: 14px 0 0; color: rgba(255,255,255,.92); font-size: 15px; line-height: 1.65; }
+.invite-benefit-grid { position: relative; z-index: 1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; margin-top: 22px; }
+.invite-benefit-grid span { min-height: 40px; display: flex; align-items: center; justify-content: center; padding: 8px; border: 1px solid rgba(255,255,255,.25); border-radius: 8px; background: rgba(255,255,255,.14); color: #fff; font-size: 13px; font-weight: 800; text-align: center; }
+.invite-poster-qr-card { position: absolute; z-index: 1; left: 22px; right: 22px; bottom: 58px; display: flex; align-items: center; gap: 14px; padding: 14px; border-radius: 8px; background: #fff; color: #0b3a2b; box-shadow: 0 14px 34px rgba(0,0,0,.18); }
+.invite-qr-shell { width: 112px; height: 112px; flex: 0 0 auto; display: grid; place-items: center; border: 7px solid #fff; border-radius: 8px; background: #fff; box-shadow: inset 0 0 0 1px #e1eadb; color: #0b3a2b; font-weight: 900; }
+.invite-qr-shell img { width: 100%; height: 100%; display: block; object-fit: contain; }
+.invite-poster-meta { min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.invite-poster-meta b { color: #0b3a2b; font-size: 16px; }
+.invite-poster-meta span { color: #5b7068; font-size: 12px; overflow-wrap: anywhere; }
+.invite-poster-disclaimer { position: absolute; z-index: 1; left: 22px; right: 22px; bottom: 18px; margin: 0; color: rgba(255,255,255,.72); font-size: 11px; line-height: 1.5; text-align: center; }
+.invite-action-panel { min-width: 0; padding: 26px; border: 1px solid #e4eadc; border-radius: 8px; background: linear-gradient(180deg, #ffffff 0%, #fbfcf8 100%); box-shadow: inset 0 0 0 6px #f7faf3; }
+.invite-action-kicker { display: inline-flex; margin-bottom: 10px; padding: 5px 10px; border-radius: 8px; background: #f7eed0; color: #876718; font-size: 12px; font-weight: 900; }
+.invite-action-panel h3 { margin: 0 0 8px; color: var(--pri-dark); font-size: 24px; }
+.invite-action-panel p { margin: 0; color: var(--text3); line-height: 1.65; }
+.invite-action-list { display: grid; gap: 10px; margin: 20px 0; }
+.invite-action-item { display: grid; grid-template-columns: 34px 1fr; gap: 4px 10px; align-items: center; padding: 13px; border: 1px solid #e2ead9; border-radius: 8px; background: #fff; }
+.invite-action-item b { grid-row: span 2; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 8px; background: #0b3a2b; color: #ffe58f; font-size: 15px; }
+.invite-action-item span { color: var(--text1); font-weight: 800; }
+.invite-action-item em { color: var(--text3); font-size: 12px; font-style: normal; }
+.invite-link-box { display: block; min-width: 0; padding: 12px; border: 1px dashed #cbdcbc; border-radius: 8px; background: #f8fbf4; color: #50604f; font-size: 12px; line-height: 1.5; word-break: break-all; }
+.invite-action-buttons { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
 
 .bind-panel { padding-bottom: 4px; }
 .bind-row { display: flex; gap: 12px; padding: 0 24px 16px; }
@@ -1888,6 +3568,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--p
 .data-table tbody tr { transition: background .18s; }
 .data-table tbody tr:nth-child(even) { background: #fffefb; }
 .data-table tbody tr:hover { background: #f8fbf4; }
+.params-cell { max-width: 320px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .product-cell, .user-cell { display: flex; align-items: center; gap: 12px; min-width: 180px; }
 .product-cell img, .user-cell img { width: 42px; height: 42px; border-radius: 8px; object-fit: cover; border: 1px solid var(--border); flex-shrink: 0; }
 .product-cell b, .user-cell b { display: block; color: var(--text1); font-size: 14px; max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1913,6 +3594,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--p
 .config-suffix { color: var(--text3); font-size: 12px; white-space: nowrap; }
 .cfg-edit-row input { flex: 1; min-width: 0; height: 38px; padding: 0 10px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 14px; background: #fff; }
 .mini-save { height: 38px; padding: 0 14px; border: none; border-radius: 8px; background: var(--pri); color: #fff; font-size: 13px; font-weight: 600; }
+.cfg-desc { margin-top: 8px; color: var(--text3); font-size: 12px; line-height: 1.45; }
 .policy-warning-panel { margin: 0 0 16px; padding: 14px 16px 14px 18px; border: 1px solid #ffdca8; border-left: 4px solid #f08c00; border-radius: 8px; background: linear-gradient(180deg, #fff9ef 0%, #fff6e8 100%); color: #8a4b00; box-shadow: 0 6px 18px rgba(161, 93, 0, .06); }
 .policy-warning-panel strong { display: block; margin-bottom: 7px; font-size: 14px; color: #9a5100; }
 .policy-warning-panel p { margin: 4px 0; font-size: 13px; line-height: 1.5; }
@@ -1922,12 +3604,19 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--p
 .brand-empty img { width: 56px; height: 56px; border-radius: 8px; object-fit: cover; opacity: .8; }
 
 @media (max-width: 1100px) {
-  .asset-cards { grid-template-columns: 1fr; }
+  .asset-cards, .dashboard-grid { grid-template-columns: 1fr; }
   .admin-grid.two { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 768px) {
   .mini-topbar { padding: 10px 14px; }
+  .campaign-topbar { padding: 10px 14px; }
+  .campaign-hero, .campaign-content { grid-template-columns: 1fr; }
+  .campaign-store-card h1 { font-size: 26px; }
+  .campaign-store-lines { grid-template-columns: 1fr; }
+  .campaign-qr-panel { display: block; }
+  .campaign-qr-panel img { margin-top: 14px; }
+  .campaign-signup { padding: 18px; }
   .growth-hero { grid-template-columns: 1fr; gap: 22px; margin-top: 16px; padding: 24px 18px; }
   .hero-copy h1 { font-size: 30px; }
   .hero-copy p { font-size: 14px; }
@@ -1965,6 +3654,11 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--p
   .bind-row, .upload-row { flex-direction: column; }
   .pc-header { align-items: flex-start; flex-direction: column; padding: 15px 16px; }
   .pc-body, .form-grid, .config-grid, .invite-block { padding: 16px; }
+  .support-bubble { max-width: 92%; }
+  .support-compose { grid-template-columns: 1fr; }
+  .notice-item { flex-direction: column; }
+  .notice-meta { align-items: flex-start; white-space: normal; }
+  .menu-badge { margin-left: 0; position: absolute; top: 4px; right: 8px; }
   .filter-bar { margin: 0 12px 16px; padding: 12px; }
   .header-actions, .pagination-bar { justify-content: flex-start; width: 100%; }
   .asset-cards { gap: 12px; margin-bottom: 18px; }
@@ -1975,6 +3669,16 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--p
   .flow-row, .team-card { padding: 13px; }
   .qr-card { padding: 24px 16px; box-shadow: inset 0 0 0 4px #f7faf3; }
   .qr-meta { gap: 12px; }
+  .invite-upgrade-grid { grid-template-columns: 1fr; gap: 16px; padding: 16px; }
+  .invite-poster-preview { width: min(100%, 380px); min-height: 640px; margin: 0 auto; padding: 18px; }
+  .invite-poster-preview::before { inset: 10px; }
+  .invite-poster-title { margin-top: 26px; }
+  .invite-poster-subtitle { font-size: 14px; }
+  .invite-benefit-grid { gap: 8px; }
+  .invite-poster-qr-card { left: 18px; right: 18px; bottom: 54px; gap: 10px; padding: 12px; }
+  .invite-qr-shell { width: 98px; height: 98px; }
+  .invite-action-panel { padding: 18px; }
+  .invite-action-buttons { grid-template-columns: 1fr; }
   .bind-row { padding: 0 16px 16px; }
   .code-box { flex-direction: column; }
   .code-btn, .btn-main, .mini-save { width: 100%; }

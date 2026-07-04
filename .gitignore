@@ -4,6 +4,7 @@ frontend/dist/
 frontend/dist-mp/
 frontend/.mp-weixin-src/
 nul
+.superpowers/
 
 *.log
 *.tmp
